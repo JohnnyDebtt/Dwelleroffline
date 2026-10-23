@@ -1,0 +1,16 @@
+{
+  "name": "DWELLER (iPhone offline)",
+  "short_name": "DWELLER",
+  "description": "DWELLER, a side-scroller in The Seeker universe. Offline edition for iPhone.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#07070c",
+  "theme_color": "#07070c",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
