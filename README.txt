@@ -1,4 +1,4 @@
-DWELLER: iPhone OFFLINE EDITION (a one-off copy; it will not get updates)
+DWELLER: iPhone OFFLINE EDITION, v14.4 (a one-off copy; it will not get updates)
 
 iPhone can only install a web game from a web address (https), so this folder has to be put online once.
 After it is installed on your Home Screen it plays with no connection at all, full screen, and keeps your saves.
@@ -14,3 +14,8 @@ After it is installed on your Home Screen it plays with no connection at all, fu
 4. Open DWELLER from the new icon. Turn the phone sideways. It now works in airplane mode.
 
 Saves live inside the installed app (separate from Safari). Deleting the icon deletes the saves.
+
+This is v14.4: it has the relics and the Relic Room, R to restart a level, and the flooded well.
+If you put it at the same address as the older offline copy, the installed app picks up this version after it has
+been opened online once (close it and open it again), and your saves stay. At a new address it installs as a separate app with its own saves
+(use Settings > COPY SAVE CODE in the old one and LOAD SAVE CODE in the new one to carry your save over).

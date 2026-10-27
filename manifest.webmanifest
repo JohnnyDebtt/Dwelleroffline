@@ -1,7 +1,7 @@
 {
-  "name": "DWELLER (iPhone offline)",
+  "name": "DWELLER (iPhone offline v14.4)",
   "short_name": "DWELLER",
-  "description": "DWELLER, a side-scroller in The Seeker universe. Offline edition for iPhone.",
+  "description": "DWELLER, a side-scroller in The Seeker universe. Offline edition for iPhone, v14.4.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
