@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>DWELLER (iPhone offline v15.3)</title>
+<title>DWELLER (iPhone offline v15.5)</title>
 <!-- iPhone offline edition: a one-off copy that installs to the Home Screen and plays with no connection -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -4930,7 +4930,7 @@ window.DWELLER_DEEP = [
     get life() { return LIFE; },
     setCoat, COATS, drawSpool, drawChest,
     PAL, load, prepare, drawScene, drawText, textWidth, textSprite, spawn, updateParticles, markTether, tickTethers,
-    SHEETS, IMG, parts, hsl, hash2, SHARDS, THEMES, drawGem, drawShard, drawMini, drawPortrait, shade,
+    COAT_SRC, SHEETS, IMG, parts, hsl, hash2, SHARDS, THEMES, drawGem, drawShard, drawMini, drawPortrait, shade,
     get theme() { return TH; }, NETN, NET, seekerTraits, setSeeker, drawFrame, drawPlayer, drawParticles, BREATH, get seekerId() { return seekerId; }, resetTethers() { tetherT = {}; }, noteBounce, guardianBurst, clearGuardian() { gBits.length = 0; },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -5517,6 +5517,7 @@ window.DWELLER_DEEP = [
       switch (name) {
         case 'jump': this.sfxNoise(t, 0.12, 'bandpass', 500, 1400, 0.10 * v, 1.2); this.sfxTone(t, 190, 330, 0.12, 0.06 * v); break;
         case 'land': this.sfxNoise(t, 0.16, 'lowpass', 600, 120, 0.22 * v, 0.7); this.sfxTone(t, 90, 48, 0.2, 0.18 * v); break;
+        case 'skit': this.sfxTone(t, F0 * 2, F0 * 2 * 0.995, 9, 0.10, 'sine'); this.sfxTone(t + 0.6, F0 * 3, F0 * 3, 8, 0.045, 'sine'); this.sfxTone(t + 1.2, F0 * 4 * 7 / 8, F0 * 4 * 7 / 8, 7, 0.02, 'triangle'); this.sfxNoise(t, 6, 'lowpass', 400, 120, 0.03, 0.7); break;
         case 'splash': this.sfxNoise(t, 0.45, 'lowpass', 2800, 260, 0.24 * v, 0.8); this.sfxNoise(t + 0.02, 0.32, 'bandpass', 1900, 700, 0.09 * v, 2.5); this.sfxTone(t + 0.03, F0 * 3, F0 * 6, 0.14, 0.07 * v); this.sfxTone(t + 0.22, F0 * 12, F0 * 15, 0.06, 0.025 * v); break;
         case 'splashOut': this.sfxNoise(t, 0.3, 'bandpass', 2400, 900, 0.11 * v, 1.6); [0.14, 0.31, 0.5].forEach((d, i) => this.sfxTone(t + d, F0 * [12, 14, 18][i], F0 * [15, 18, 21][i], 0.05, 0.03 * v)); break;
         case 'wade': this.sfxNoise(t, 0.16, 'lowpass', 520, 180, 0.06 * v, 1); break;
@@ -6971,7 +6972,7 @@ window.DWELLER_DEEP = [
     }
     R.drawParticles(ctx, camX, camY);
     const flooded = st.inRoom && st.rareUsed;
-    if (flooded) drawWater(ctx, camX, camY, time);
+    if (flooded) drawWater(ctx, camX, camY, time, st.P, st.memNear);
     // down the well the Dweller goes behind the ground: the cap and the earth are painted again, over it
     const inShaft = !st.inRoom && s.x + 5 > WELL.x0 * TS && s.x < (WELL.x1 + 1) * TS && s.y + s.h > GY - 12;
     if (inShaft) { wellCap(ctx, camX, camY, true, true); wellRims(ctx, camX, camY); }
@@ -7024,7 +7025,27 @@ window.DWELLER_DEEP = [
   const WATERY = (WELL.room[2] + 4) * TS, WX0 = WELL.room[0] * TS, WX1 = WELL.room[1] * TS, WBOT = WELL.room[3] * TS;
   const RIP = [];
   function ripple(x, big, time) { RIP.push({ x: Math.round(x), t: time, big: big ? 1 : 0 }); if (RIP.length > 24) RIP.shift(); }
-  function drawWater(ctx, camX, camY, time) {
+  /* the water remembers: one glint on its surface for each sliver you have found, its colour; stand under one and it
+     shows you what that sliver saw (see main.js). MEMX: where each sits */
+  const MEMX = [-56, -38, -20, 18, 36, 54].map(d => WELLX + d);   // (three each side of the rope, clear of it)
+  const SHC = ['#ef5b5b', '#f39a4c', '#f1d663', '#6ad890', '#5ca8f2', '#a77cff'];
+  function drawMemories(ctx, camX, camY, time, P, near) {
+    if (!P || !P.beaten) return;
+    const top = WATERY - camY;
+    MEMX.forEach((X, k) => {
+      if (!P.beaten[k]) return;
+      const x = X - camX, on = near === k, pul = 0.55 + 0.45 * Math.sin(time * (0.9 + k * 0.13) + k * 1.7), a = (on ? 0.9 : 0.5) * pul + (on ? 0.1 : 0);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, top, 0, x, top, on ? 9 : 6); g.addColorStop(0, SHC[k] + (on ? '70' : '40')); g.addColorStop(1, SHC[k] + '00');
+      ctx.fillStyle = g; ctx.fillRect(x - 10, top - 10, 20, 20); ctx.restore();
+      ctx.globalAlpha = a; ctx.fillStyle = SHC[k]; ctx.fillRect(x - 1, top - 1, 3, 1); ctx.fillRect(x, top - 2, 1, 1);
+      // its light, wavering down into the water
+      for (let j = 1; j < 9; j++) { if (Math.sin(time * 2 + j * 1.3 + k) < -0.2) continue; ctx.globalAlpha = a * 0.5 * (1 - j / 9); ctx.fillRect(x + Math.round(Math.sin(time * 1.5 + j * 0.8 + k) * 1.2), top + j * 2, 1, 1); }
+      ctx.globalAlpha = 1;
+    });
+  }
+  function drawWater(ctx, camX, camY, time, P, near) {
+    drawMemories(ctx, camX, camY, time, P, near);
     const top = WATERY - camY, h = WBOT - WATERY;
     for (let X = WX0; X < WX1; X++) {
       const k = X - WX0, off = Math.sin(k * 0.35 + time * 0.9) + 0.6 * Math.sin(k * 0.13 - time * 0.5) > 1.0 ? 1 : 0;
@@ -7527,7 +7548,7 @@ window.DWELLER_DEEP = [
   }
 
   global.DwellerTown = {
-    build, draw, signText, GY, W, H, TS, WPX, HPX, DOORS, GREAT, RES, WELLX, RAREX, RAREY, WELL, WATERY, ripple, doorShape, groundAt, candle,
+    build, draw, signText, GY, W, H, TS, WPX, HPX, DOORS, GREAT, RES, WELLX, RAREX, RAREY, WELL, WATERY, MEMX, ripple, doorShape, groundAt, candle,
     get world() { return TW; },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -8304,6 +8325,370 @@ window.DWELLER_DEEP = [
   global.DwellerRelic = { RELICS, NINTH, draw, box, create, bakeArt, step, drawRoom, W, H, FL, RX, NX, SOCK, AT, STUMP };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
+<script>/* DWELLER - the sliver skits: a few wordless seconds of what each sliver saw, and one line.
+ *
+ * Someone came down before you: a small grey-cloaked figure carrying the whole crystal, always one world ahead. Each
+ * sliver shows a moment of it. The figure's face is never seen and nothing is explained.
+ *
+ *   DwellerSkits.draw(ctx, i, t, LW, LH, R)   skit i at t seconds, drawn into the whole view; returns the frame's box
+ *   DwellerSkits.DUR[i], LINE[i]               its length in seconds, and its line
+ */
+(function (global) {
+  'use strict';
+  const LINE = ['SOMEONE CAME DOWN BEFORE YOU.', 'IT WAS CARRYING THE LIGHT.', 'IT KNEW YOU WOULD COME.', 'IT BROKE IT ON PURPOSE.', 'SO YOU WOULD HAVE TO FOLLOW.', 'IT IS STILL DOWN HERE.'];
+  const DUR = [10.5, 10.5, 10.5, 10, 11, 12];
+  const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const sm = (a, b, x) => { const u = Math.max(0, Math.min(1, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+  const px = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), w || 1, h || 1); };
+
+  /* the figure: the Dweller's own frames in a cloak of its own. (window.__skitCoat picks one, for comparing:
+     'ash' undyed grey, 'vein' the last cloak the weaver makes, 'hollow' one no one can have: black, a seam of the six
+     colours down its folds) */
+  const FIGS = {
+    ash: { main: [72, 74, 82], shade: [40, 41, 47] },          // a plain cloak, a deep grey: darker than any the weaver makes, never black
+    vein: { main: [76, 65, 88], shade: [39, 32, 48], seam: () => [255, 125, 152], glow: '255,90,122', glowA: 0.22 },
+    hollow: { main: [30, 30, 36], shade: [12, 12, 16], seam: (y, t) => null, glow: '220,220,255', glowA: 0.08, prism: true },
+  };
+  const figKey = () => (typeof window !== 'undefined' && window.__skitCoat) || 'ash';
+  let FIGC = {};
+  function figSheets(R) {
+    const key = figKey(); if (FIGC[key]) return FIGC[key];
+    const F = FIGS[key] || FIGS.ash, out = {};
+    for (const nm of ['run', 'breath', 'idle', 'runV', 'breathV', 'idleV']) {
+      const sh = R.SHEETS[nm]; if (!sh) continue;
+      const src = (R.COAT_SRC && R.COAT_SRC[nm]) || sh.cv;      // (always the bare sand frames, whatever cloak you wear)
+      const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+      const x = c.getContext('2d'); x.drawImage(src, 0, 0);
+      const id = x.getImageData(0, 0, c.width, c.height), d = id.data, visor = nm.endsWith('V'), Wd = c.width, Hd = c.height;
+      const kind = new Uint8Array(Wd * Hd);   // 1 the cloak, 2 its shadow
+      for (let i = 0; i < d.length; i += 4) {
+        if (!d[i + 3]) continue;
+        if (visor) { d[i] = 196; d[i + 1] = 206; d[i + 2] = 212; d[i + 3] = Math.round(d[i + 3] * 0.55); continue; }
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        if (r === 185 && g === 168 && b === 123) { kind[i >> 2] = 1; [d[i], d[i + 1], d[i + 2]] = F.main; }
+        else if (r === 107 && g === 98 && b === 88) { kind[i >> 2] = 2; [d[i], d[i + 1], d[i + 2]] = F.shade; }
+        else { const L = (0.3 * r + 0.59 * g + 0.11 * b) / 255, gg = 20 + L * 70; d[i] = gg; d[i + 1] = gg; d[i + 2] = gg + 6; }
+      }
+      x.putImageData(id, 0, 0);
+      out[nm] = Object.assign({}, sh, { cv: c });
+      // the seam: where the cloak meets a fold of its shadow, running down
+      if (!visor && (F.seam || F.prism)) {
+        const sc = document.createElement('canvas'); sc.width = Wd; sc.height = Hd; const sx = sc.getContext('2d'), od = sx.createImageData(Wd, Hd), o = od.data;
+        const at = (xx, yy) => xx < 0 || yy < 0 || xx >= Wd || yy >= Hd ? 0 : kind[yy * Wd + xx];
+        for (let yy = 0; yy < Hd; yy++) for (let xx = 0; xx < Wd; xx++) {
+          if (at(xx, yy) !== 1 || !(at(xx + 1, yy) === 2 || at(xx - 1, yy) === 2) || at(xx, yy - 1) === 2) continue;
+          const j = (yy * Wd + xx) * 4, col = F.prism ? [[239, 91, 91], [243, 154, 76], [241, 214, 99], [106, 216, 144], [92, 168, 242], [167, 124, 255]][Math.floor(yy / 2) % 6] : F.seam();
+          o[j] = col[0]; o[j + 1] = col[1]; o[j + 2] = col[2]; o[j + 3] = 255;
+        }
+        sx.putImageData(od, 0, 0); out[nm + 'S'] = Object.assign({}, sh, { cv: sc });
+      }
+    }
+    out.F = F;
+    return (FIGC[key] = out);
+  }
+  // the whole crystal in its arms, and the light it throws: every colour of the six, turning slowly
+  function crystalLight(ctx, R, x, y, t, k) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    R.SHARDS.slice(0, 6).forEach((col, i) => {
+      const a = t * 0.7 + i * 1.047, ox = Math.cos(a) * 3, oy = Math.sin(a) * 2, rr = (15 + 3 * Math.sin(t * 1.3 + i)) * k;
+      const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rr);
+      g.addColorStop(0, col + '24'); g.addColorStop(1, col + '00'); ctx.fillStyle = g; ctx.fillRect(x - rr - 4, y - rr - 4, rr * 2 + 8, rr * 2 + 8);
+    });
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 4 * k); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(x - 10 * k, y - 10 * k, 20 * k, 20 * k);
+    ctx.restore();
+  }
+
+  /* I  THE DESCENT. An ice cave. The figure walks in carrying the crystal. A lamp ahead turns its beam toward it, finds
+     it, holds on it a moment, and slowly turns away. The figure walks on, under the lamp, and out of sight. */
+  function skit0(c, R, t, W, H) {
+    const FL = Math.round(H * 0.82), LY = Math.round(H * 0.3), TH = R.THEMES.descent;
+    // the cave: cold dark, columns of ice far back, a ceiling of icicles, a floor of rock with a pale rim
+    const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#141b27'); bg.addColorStop(1, '#0a0d14'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    for (let k = 0; k < 9; k++) { const x = (k * 53 + 20 * hash(k, 1)) % W, w = 10 + 16 * hash(k, 2); c.globalAlpha = 0.5; px(c, k % 2 ? TH.far[0] : TH.far[1], x * 0.5, 6, w * 0.5, FL - 6); c.globalAlpha = 1; }
+    px(c, '#06080c', 0, 0, W, 6);
+    for (let x = 0; x < W; x += 2) { const L = 2 + Math.floor(9 * Math.pow(hash(x, 3), 3)); for (let j = 0; j < L; j++) px(c, j > L - 2 ? TH.stal[1] : '#06080c', x, 6 + j, 1, 1); }
+    px(c, '#07090d', 0, FL, W, H - FL); px(c, TH.tuft[0], 0, FL, W, 1);
+    for (let x = 2; x < W; x += 7) if (hash(x, 4) < 0.4) { px(c, TH.tuft[0], x, FL - 2, 1, 2); px(c, TH.tuft[1], x + 1, FL - 3, 1, 1); }
+    for (let k = 0; k < 14; k++) { const u = ((t * 0.04 + hash(k, 5)) % 1); c.globalAlpha = 0.35 * Math.sin(u * Math.PI); px(c, '#9fb4c8', (hash(k, 6) * W + Math.sin(t + k) * 3), 8 + u * (FL - 10)); c.globalAlpha = 1; }
+
+    // the figure: in, a halt when the light comes, then on and away
+    const LX = Math.round(W * 0.66), stopX = Math.round(W * 0.42);
+    let fx, walking;
+    if (t < 4.3) { fx = -8 + (stopX + 8) * sm(0.4, 4.3, t); walking = t < 4.15; }
+    else if (t < 6.4) { fx = stopX; walking = false; }
+    else { fx = stopX + (t - 6.4) * 17; walking = true; }
+    // the beam: pointing away, swinging round onto the figure, holding, turning away again
+    const away = 0.55, onto = Math.atan2(FL - 5 - LY, fx - LX) - Math.PI / 2;
+    let ang;
+    if (t < 2.6) ang = away + Math.sin(t * 0.9) * 0.05;
+    else if (t < 4.6) ang = away + (Math.atan2(FL - 5 - LY, stopX - LX) - Math.PI / 2 - away) * sm(2.6, 4.6, t);
+    else if (t < 5.4) ang = Math.atan2(FL - 5 - LY, stopX - LX) - Math.PI / 2 + Math.sin(t * 30) * 0.004;
+    else ang = (Math.atan2(FL - 5 - LY, stopX - LX) - Math.PI / 2) + (0.9 - (Math.atan2(FL - 5 - LY, stopX - LX) - Math.PI / 2)) * sm(5.4, 7.6, t);
+    const near = 1 - sm(0, 30, Math.abs(Math.tan(ang - onto)) * 60);   // how squarely the light is on it
+    // the lamp: a chain, a cage, and its cone of cold light
+    px(c, '#2a313c', LX, 6, 1, LY - 8);
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const len = 120, sp = 0.2, a0 = ang + Math.PI / 2 - sp, a1 = ang + Math.PI / 2 + sp;
+    const gr = c.createRadialGradient(LX, LY, 2, LX, LY, len); gr.addColorStop(0, 'rgba(145,203,222,0.30)'); gr.addColorStop(1, 'rgba(145,203,222,0)');
+    c.beginPath(); c.moveTo(LX, LY); c.lineTo(LX + Math.cos(a0) * len, LY + Math.sin(a0) * len); c.lineTo(LX + Math.cos(a1) * len, LY + Math.sin(a1) * len); c.closePath();
+    c.save(); c.beginPath(); c.rect(0, 0, W, FL + 1); c.clip(); c.beginPath(); c.moveTo(LX, LY); c.lineTo(LX + Math.cos(a0) * len, LY + Math.sin(a0) * len); c.lineTo(LX + Math.cos(a1) * len, LY + Math.sin(a1) * len); c.closePath(); c.fillStyle = gr; c.fill(); c.restore();
+    const g2 = c.createRadialGradient(LX, LY, 0, LX, LY, 12); g2.addColorStop(0, 'rgba(145,203,222,0.45)'); g2.addColorStop(1, 'rgba(145,203,222,0)'); c.fillStyle = g2; c.fillRect(LX - 12, LY - 12, 24, 24);
+    c.restore();
+    px(c, TH.lamp[0], LX - 2, LY - 2, 5, 5); px(c, TH.lamp[1], LX - 1, LY - 1, 3, 3); px(c, '#ffffff', LX, LY, 1, 1);
+    // its light on the floor
+    const hitX = LX + Math.tan(-ang) * (FL - LY);
+    c.save(); c.globalCompositeOperation = 'lighter'; const g3 = c.createRadialGradient(hitX, FL, 0, hitX, FL, 16); g3.addColorStop(0, 'rgba(145,203,222,0.22)'); g3.addColorStop(1, 'rgba(145,203,222,0)'); c.fillStyle = g3; c.fillRect(hitX - 16, FL - 7, 32, 8); c.restore();
+
+    // the crystal's light, brighter for a moment while the beam is on it, as if the two knew each other
+    const G = figSheets(R), cy = FL - 4, face = 1;
+    crystalLight(c, R, fx + 3 * face, cy, t, 1 + 0.35 * near);
+    const nm = walking ? 'run' : 'breath', fi = walking ? 2 + Math.floor(t * 8) % 8 : R.BREATH[Math.floor(t * 12) % R.BREATH.length];
+    if (G[nm]) R.drawFrame(c, G[nm], fi, fx, FL, face < 0);
+    if (G[nm + 'V']) R.drawFrame(c, G[nm + 'V'], fi, fx, FL, face < 0);
+    if (G[nm + 'S']) { c.globalAlpha = 0.7 + 0.3 * Math.sin(t * 2); R.drawFrame(c, G[nm + 'S'], fi, fx, FL, face < 0); c.globalAlpha = 1; }
+    if (G.F.glow) { c.save(); c.globalCompositeOperation = 'lighter'; const gg = c.createRadialGradient(fx, FL - 5, 1, fx, FL - 5, 10); gg.addColorStop(0, 'rgba(' + G.F.glow + ',' + (G.F.glowA * (0.8 + 0.2 * Math.sin(t * 1.5))).toFixed(3) + ')'); gg.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gg; c.fillRect(fx - 10, FL - 15, 20, 20); c.restore(); }
+    // the crystal itself, held against its chest
+    // (a small diamond of six colours, turning: the whole crystal, before it was broken)
+    const gx = Math.round(fx + 3 * face), gy = Math.round(cy), sh = Math.floor(t * 3);
+    [[0, -2], [-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [0, 1]].forEach(([dx, dy], k) => px(c, R.SHARDS[(k + sh) % 6], gx + dx, gy + dy));
+    px(c, '#ffffff', gx, gy - 1);
+  }
+
+
+  /* ---- shared pieces */
+  // the figure at (x, its feet on fl): walking, standing and breathing, or crouched low ('kneel')
+  function drawFig(c, R, t, x, fl, o) {
+    o = o || {};
+    const G = figSheets(R), face = o.face || 1, a = o.alpha === undefined ? 1 : o.alpha;
+    const nm = o.kneel ? 'idle' : o.walking ? 'run' : 'breath', fi = o.kneel ? 1 : o.walking ? 2 + Math.floor(t * 8) % 8 : R.BREATH[Math.floor(t * 12) % R.BREATH.length];
+    c.globalAlpha = a;
+    if (G[nm]) R.drawFrame(c, G[nm], fi, x, fl, face < 0);
+    if (G[nm + 'V']) R.drawFrame(c, G[nm + 'V'], fi, x, fl, face < 0);
+    c.globalAlpha = 1;
+  }
+  // the whole crystal: a small diamond of six colours, turning
+  function gem(c, R, x, y, t, a) {
+    x = Math.round(x); y = Math.round(y); const sh = Math.floor(t * 3); c.globalAlpha = a === undefined ? 1 : a;
+    [[0, -2], [-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [0, 1]].forEach(([dx, dy], k) => px(c, R.SHARDS[(k + sh) % 6], x + dx, y + dy));
+    px(c, '#ffffff', x, y - 1); c.globalAlpha = 1;
+  }
+  // one sliver: a sliver of a single colour with a soft glow of it
+  function sliver(c, col, x, y, a, glow) {
+    x = Math.round(x); y = Math.round(y); c.globalAlpha = a === undefined ? 1 : a;
+    if (glow) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(x, y, 0, x, y, glow); g.addColorStop(0, col + '50'); g.addColorStop(1, col + '00'); c.fillStyle = g; c.fillRect(x - glow, y - glow, glow * 2, glow * 2); c.restore(); }
+    px(c, col, x, y - 1, 1, 3); px(c, '#ffffff', x, y - 1); c.globalAlpha = 1;
+  }
+  function glowAt(c, x, y, r, rgb, a) { c.save(); c.globalCompositeOperation = 'lighter'; const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); g.addColorStop(1, 'rgba(' + rgb + ',0)'); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); c.restore(); }
+  const rgbOf = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
+  function cave(c, W, H, top, bot, fl, rim) {
+    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, top); g.addColorStop(1, bot); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    if (fl !== undefined) { px(c, '#07090d', 0, fl, W, H - fl); px(c, rim, 0, fl, W, 1); }
+  }
+
+  /* II  THE MYCELIUM. The figure rests under a great cap. Every mushroom leans toward the crystal and brightens; the one
+     nearest it flickers, greys, and slumps. */
+  function skit1(c, R, t, W, H) {
+    const FL = Math.round(H * 0.82), TH = R.THEMES.mycelium;
+    cave(c, W, H, '#0f2421', '#071210', FL, '#2f5e4f');
+    // spores drifting up
+    for (let k = 0; k < 16; k++) { const u = ((t * 0.05 + hash(k, 7)) % 1); c.globalAlpha = 0.5 * Math.sin(u * Math.PI); px(c, '#7fd4b2', hash(k, 8) * W + Math.sin(t * 0.7 + k) * 3, FL - u * (FL - 4)); c.globalAlpha = 1; }
+    // the great cap
+    const CX = Math.round(W * 0.47);
+    px(c, '#1d3a33', CX - 2, 24, 4, FL - 24); px(c, '#2a4d44', CX - 2, 24, 1, FL - 24);
+    for (let j = 0; j < 10; j++) { const hw = Math.round(34 * Math.sqrt(1 - Math.pow((9 - j) / 10, 2))); px(c, j > 7 ? '#2f5e4f' : '#1b302b', CX - hw, 14 + j, hw * 2, 1); }
+    for (let x = CX - 32; x < CX + 33; x += 2) px(c, '#3d6a5a', x, 24, 1, 1 + (x % 4 === 0 ? 1 : 0));
+    // the figure walks in and sits beneath it
+    const stop = Math.round(W * 0.42), fx = t < 3.6 ? -8 + (stop + 8) * sm(0.4, 3.6, t) : stop, walking = t < 3.45;
+    const lean = sm(3.6, 5.6, t), cy = FL - 4;
+    // the mushrooms, leaning toward the light and brightening; the nearest one dies
+    const MU = [[0.18, 4], [0.27, 6], [0.33, 3], [0.56, 5], [0.66, 7], [0.74, 4], [0.84, 6]];
+    MU.forEach(([u, h], k) => {
+      const mx = Math.round(W * u), near = k === 3, d = (fx + 3) - mx, dir = Math.sign(d), dist = Math.abs(d);
+      let die = near ? sm(6.0, 7.4, t) : 0;
+      const flick = near && t > 5.6 && t < 7.0 ? (Math.sin(t * 40) > 0.3 ? 0.4 : 1) : 1;
+      const bright = (1 - die) * lean * Math.max(0, 1 - dist / 70) * flick;
+      const bend = Math.round(dir * Math.min(2, lean * 2.2 * Math.max(0, 1 - dist / 80))) * (1 - die) + (near ? Math.round(die * 3) * -dir : 0);
+      const hh = Math.round(h - die * 3);
+      for (let j = 0; j < hh; j++) px(c, die > 0.5 ? '#3b4645' : '#4f6366', mx + Math.round(bend * j / hh), FL - j - 1);
+      const capC = die > 0.5 ? '#55605e' : bright > 0.3 ? '#c0f4dc' : '#8ec3b9', tx = mx + bend, ty = FL - hh - 1;
+      px(c, capC, tx - 1, ty, 3, 1); if (h > 4) px(c, capC, tx, ty - 1, 1, 1);
+      if (bright > 0.05) glowAt(c, tx, ty, 6, '127,212,178', (0.35 * bright).toFixed(3));
+    });
+    crystalLight(c, R, fx + 3, cy, t, 1);
+    drawFig(c, R, t, fx, FL, { walking });
+    gem(c, R, fx + 3, cy, t);
+  }
+
+  /* III  THE GLASS GARDEN. The figure stops before a pane of glass. Its reflection is not grey: it is you, in your gold
+     cloak. The reflection takes a step toward it. The figure does not move. */
+  function skit2(c, R, t, W, H) {
+    const FL = Math.round(H * 0.82);
+    cave(c, W, H, '#1a1430', '#0b0816', FL, '#5d4f94');
+    for (let k = 0; k < 7; k++) { const x = hash(k, 9) * W, h = 8 + hash(k, 10) * 20; c.globalAlpha = 0.5; for (let j = 0; j < h; j++) px(c, '#2a2244', x - Math.round(j * 0.2), FL - j, 2 + Math.round((h - j) / 6), 1); c.globalAlpha = 1; }
+    const P0 = Math.round(W * 0.56), P1 = Math.round(W * 0.66), PT = 12;
+    const stop = Math.round(W * 0.47), fx = t < 3.8 ? -8 + (stop + 8) * sm(0.4, 3.8, t) : stop, walking = t < 3.65;
+    // the pane: pale violet glass, a sheen sliding over it
+    c.globalAlpha = 0.18; px(c, '#b9a2f4', P0, PT, P1 - P0, FL - PT); c.globalAlpha = 0.5; px(c, '#d4c6ff', P0, PT, 1, FL - PT); px(c, '#d4c6ff', P1 - 1, PT, 1, FL - PT); px(c, '#e8deff', P0, PT, P1 - P0, 1); c.globalAlpha = 1;
+    // the reflection: the Dweller as you are, in sand gold, facing back, stepping closer
+    const step = sm(5.4, 6.4, t), rx = Math.round(P0 + (P0 - fx) * 0.55 + 4 - step * 2);
+    c.save(); c.beginPath(); c.rect(P0 + 1, PT + 1, P1 - P0 - 2, FL - PT - 1); c.clip();
+    const S = R.COAT_SRC || {}, sand = (nm) => S[nm] ? Object.assign({}, R.SHEETS[nm], { cv: S[nm] }) : R.SHEETS[nm];
+    const nm = step > 0 && step < 1 ? 'run' : 'breath', fi = nm === 'run' ? 2 + Math.floor(t * 8) % 8 : R.BREATH[Math.floor(t * 12) % R.BREATH.length];
+    const vis = sm(3.2, 4.4, t);
+    c.globalAlpha = 0.75 * vis; R.drawFrame(c, sand(nm), fi, rx, FL, true); R.drawFrame(c, R.SHEETS[nm + 'V'], fi, rx, FL, true);
+    c.globalAlpha = 0.6 * vis * sm(6.8, 7.8, t); glowAt(c, rx - 1, FL - 7, 4, '240,242,240', 0.5);
+    c.globalAlpha = 1; c.restore();
+    for (let k = 0; k < 5; k++) { const u = (t * 0.3 + k / 5) % 1; c.globalAlpha = 0.25 * Math.sin(u * Math.PI); px(c, '#e8deff', P0 + 1 + Math.round(u * (P1 - P0 - 2)), PT + 2 + k * 9, 1, 6); c.globalAlpha = 1; }
+    crystalLight(c, R, fx + 3, FL - 4, t, 0.8);
+    drawFig(c, R, t, fx, FL, { walking });
+    gem(c, R, fx + 3, FL - 4, t);
+  }
+
+  /* IV  THE FOUNDRY. At an anvil the figure raises a hammer and strikes the crystal once. It splits into six, and the
+     pieces scatter into the dark with the sparks. */
+  function skit3(c, R, t, W, H) {
+    const FL = Math.round(H * 0.82), AX = Math.round(W * 0.55);
+    cave(c, W, H, '#241a16', '#0d0907', FL, '#6b4a35');
+    for (let k = 0; k < 5; k++) { const x = 10 + k * 34 + hash(k, 3) * 8; px(c, '#1b1411', x, 0, 3, FL); px(c, '#2e241f', x, 0, 1, FL); }
+    glowAt(c, AX, FL - 8, 40, '235,150,95', (0.10 + 0.05 * Math.sin(t * 2)).toFixed(3));
+    // the anvil
+    px(c, '#1a1513', AX - 4, FL - 4, 9, 4); px(c, '#2a221e', AX - 6, FL - 7, 13, 3); px(c, '#3d332d', AX - 6, FL - 7, 13, 1); px(c, '#2a221e', AX + 7, FL - 6, 3, 1);
+    const fx = AX - 9, hit = 4.7, struck = t >= hit;
+    // the crystal on the anvil, then its six pieces flying
+    if (!struck) { gem(c, R, AX, FL - 10, t); crystalLight(c, R, AX, FL - 10, t, 0.9); }
+    else {
+      const u = t - hit;
+      if (u < 0.25) glowAt(c, AX, FL - 10, 30 * (1 - u * 2), '255,240,220', (0.9 * (1 - u * 4)).toFixed(3));
+      for (let k = 0; k < 6; k++) {
+        const a = -Math.PI / 2 + (k - 2.5) * 0.42, sp = 40 + 18 * hash(k, 21), x = AX + Math.cos(a) * sp * u, y = FL - 10 + Math.sin(a) * sp * u + 45 * u * u;
+        const yy = Math.min(FL - 1, y), fade = 1 - sm(2.6, 4.4, u);
+        sliver(c, R.SHARDS[k], x, yy, fade, 5);
+      }
+      for (let k = 0; k < 30; k++) {
+        const a = -Math.PI * hash(k, 31), sp = 20 + 50 * hash(k, 32), life = 0.4 + 0.6 * hash(k, 33);
+        if (u > life) continue;
+        c.globalAlpha = 1 - u / life; px(c, k % 3 ? '#ffb070' : '#ffe6c8', AX + Math.cos(a) * sp * u, FL - 10 + Math.sin(a) * sp * u + 60 * u * u); c.globalAlpha = 1;
+      }
+    }
+    drawFig(c, R, t, fx, FL, {});
+    // the hammer: up slowly, a held breath, down at once
+    const raise = sm(1.8, 3.8, t), fall = sm(4.55, hit, t), ang = -0.2 - 1.7 * raise + 1.9 * fall;
+    const hx = fx + 2, hy = FL - 6, L = 9;
+    for (let i = 0; i <= L; i++) px(c, '#5a4636', hx + Math.cos(ang) * i, hy + Math.sin(ang) * i);
+    const ex = hx + Math.cos(ang) * L, ey = hy + Math.sin(ang) * L;
+    px(c, '#3a3633', ex - 1, ey - 1, 3, 3); px(c, '#6d6763', ex - 1, ey - 1, 3, 1);
+  }
+
+  /* V  EMBER DEEP. At the edge of a glowing pit the figure lets the slivers go, one at a time. Each falls a different
+     way, into its own colour of light far below. It keeps the last. */
+  function skit4(c, R, t, W, H) {
+    const FL = Math.round(H * 0.42), EDGE = Math.round(W * 0.5);
+    cave(c, W, H, '#2a1016', '#150508');
+    // the pit's glow far down
+    const g = c.createLinearGradient(0, FL, 0, H); g.addColorStop(0, 'rgba(255,112,82,0)'); g.addColorStop(1, 'rgba(255,112,82,0.35)'); c.fillStyle = g; c.fillRect(0, FL, W, H - FL);
+    for (let k = 0; k < 18; k++) { const u = ((t * 0.12 + hash(k, 5)) % 1); c.globalAlpha = 0.6 * Math.sin(u * Math.PI); px(c, k % 3 ? '#ff8f76' : '#ffd6ca', hash(k, 6) * W, H - u * (H - FL) * 0.9); c.globalAlpha = 1; }
+    // the ledge
+    px(c, '#0d0507', 0, FL, EDGE, H - FL); px(c, '#7a3036', 0, FL, EDGE, 1);
+    for (let y = FL; y < H; y++) px(c, '#0d0507', EDGE + Math.round(2 * Math.sin(y * 0.4) + (y - FL) * 0.08), y, 2, 1);
+    const fx = EDGE - 4;
+    drawFig(c, R, t, fx, FL, {});
+    // five go, one at a time; each curves away on its own way down, trailing its colour
+    for (let k = 0; k < 5; k++) {
+      const t0 = 2.2 + k * 1.15, u = t - t0, col = R.SHARDS[k];
+      if (u < 0) { sliver(c, col, fx + 3, FL - 5 + (k % 2), 0.9, 3); continue; }
+      const vx = [12, -6, 22, 4, -14][k], x = fx + 3 + vx * u, y = FL - 5 + 6 * u + 26 * u * u;
+      if (y > H + 4) continue;
+      for (let j = 1; j < 6; j++) { const uu = Math.max(0, u - j * 0.05); c.globalAlpha = 0.45 * (1 - j / 6); px(c, col, fx + 3 + vx * uu, FL - 5 + 6 * uu + 26 * uu * uu); c.globalAlpha = 1; }
+      sliver(c, col, x, y, 1, 5);
+    }
+    // the sixth, kept
+    sliver(c, R.SHARDS[5], fx + 3, FL - 4, 1, 4 + 1.5 * Math.sin(t * 2));
+  }
+
+  /* VI  THE HEART. The figure kneels at the beating heart and presses the last sliver into it. The beat stumbles. The
+     figure goes into the shadow and is gone. High above, something opens an eye. */
+  function skit5(c, R, t, W, H) {
+    const FL = Math.round(H * 0.84), HX = Math.round(W * 0.6), HY = Math.round(H * 0.6);
+    cave(c, W, H, '#201422', '#0c070e', FL, '#6a3a64');
+    // the beat: steady; then, once the sliver is in, stumbling
+    const placed = 5.2, beatAt = (tt) => { if (tt < placed) return (tt * 1.2) % 1; const v = tt - placed; return v < 1.2 ? (v * 2.6) % 1 : v < 2.4 ? 0.7 : (v * 0.8) % 1; };
+    const ph = beatAt(t), beat = Math.max(0, 1 - ph * 5) + 0.5 * Math.max(0, 1 - Math.abs(ph - 0.25) * 8);
+    // ribs of bone far behind it, faint
+    for (let k = 0; k < 4; k++) { const r = 24 + k * 6; for (let q = 0; q <= 40; q++) { const an = Math.PI * (1.12 + 0.76 * q / 40); px(c, '#2c1e2a', HX + Math.cos(an) * r * 1.15, HY + 4 + Math.sin(an) * r * 0.75); } }
+    // the great vessels: tubes rising out of the top of it into the dark, the aorta arching over
+    const tube = (pts, r, col, hi) => { const stamp = (x, y, cc, rr) => { for (let dy = -Math.ceil(rr); dy <= Math.ceil(rr); dy++) { const hw = Math.sqrt(Math.max(0, rr * rr - dy * dy)); if (hw >= 0.5) px(c, cc, Math.round(x - hw), Math.round(y + dy), Math.max(1, Math.round(hw * 2)), 1); } };
+      for (const pass of [0, 1]) for (let q = 0; q < pts.length - 1; q++) { const [x1, y1] = pts[q], [x2, y2] = pts[q + 1], n = Math.ceil(Math.hypot(x2 - x1, y2 - y1)); for (let m = 0; m <= n; m++) { const x = x1 + (x2 - x1) * m / n, y = y1 + (y2 - y1) * m / n; if (pass) { if (r > 1.2) px(c, hi, Math.round(x - r * 0.4), Math.round(y - r * 0.3)); } else stamp(x, y, col, r); } } };
+    const sq = 1 - 0.06 * beat, st = 1 + 0.05 * beat;
+    // the great vessels: thick, uneven tubes out of its top, crossing and climbing away into the dark (no loops)
+    tube([[HX + 4, HY - 8], [HX + 6, HY - 16], [HX + 3, HY - 24], [HX - 4, HY - 31], [HX - 7, 0]], 2.4, '#5c2840', '#8a4864');
+    tube([[HX - 5, HY - 8], [HX - 7, HY - 15], [HX - 4, HY - 22], [HX + 4, HY - 30], [HX + 9, 0]], 1.8, '#4c2136', '#73384f');
+    tube([[HX - 1, HY - 26], [HX - 12, HY - 33], [HX - 20, 0]], 1.1, '#43192f', '#6a3049');
+    tube([[HX + 5, HY - 20], [HX + 14, HY - 27], [HX + 22, 0]], 1, '#3c1629', '#62304a');
+    // the heart: two lobes over a body that tapers to its tip, leaning a little, lit from above and to the left;
+    // muscle running in curves round it; on each beat it squeezes in and lengthens, its veins flushing
+    const SC = 15, tilt = -0.42, ct = Math.cos(tilt), stl = Math.sin(tilt);
+    const inside = (u, v) => {
+      if (Math.hypot(u + 0.2, v + 0.18) < 0.6 || Math.hypot(u - 0.3, v + 0.24) < 0.5) return true;   // (the lobes close together: a heart, not a card's)
+      if (v < -0.25 || v > 1.05) return false;
+      return Math.abs(u) < 0.86 * Math.pow(1 - (v + 0.25) / 1.3, 0.75);
+    };
+    for (let j = -26; j <= 26; j++) for (let i = -24; i <= 24; i++) {
+      const xr = i / (SC * sq), yr = j / (SC * st), u = xr * ct + yr * stl, v = -xr * stl + yr * ct;
+      if (!inside(u, v)) continue;
+      const edge = !inside(u + 0.12, v) || !inside(u - 0.12, v) || !inside(u, v + 0.12) || !inside(u, v - 0.12);
+      const lit = 0.55 - 0.5 * u - 0.45 * v, mus = Math.sin(Math.atan2(v - 1.0, u) * 14 + Math.hypot(u, v - 1.0) * 6);
+      let col = lit > 0.8 ? '#8e4466' : lit > 0.45 ? '#723654' : lit > 0.1 ? '#5a2841' : '#3e172d';
+      if (mus > 0.78 && !edge) col = lit > 0.45 ? '#62304a' : '#331326';
+      if (edge) col = '#220d18';
+      if (Math.hypot(u + 0.42, v + 0.36) < 0.11) col = '#b56a8a';
+      px(c, col, HX + i, HY + j);
+    }
+    // a vein over its face, flushing on the beat
+    const vn2 = [[-4, -7], [-1, -2], [-3, 4], [0, 9], [2, 13]]; for (let q = 0; q < vn2.length - 1; q++) { const [x1, y1] = vn2[q], [x2, y2] = vn2[q + 1]; for (let m = 0; m <= 4; m++) px(c, beat > 0.3 ? '#a8486e' : '#5e2440', HX + x1 + (x2 - x1) * m / 4, HY + y1 * st + (y2 - y1) * st * m / 4); }
+    glowAt(c, HX, HY, 30, '210,90,140', (0.05 + 0.1 * beat).toFixed(3));
+    // the figure comes, kneels, gives up the last sliver, and goes into the shadow
+    const stop = HX - 18, fx = t < 3.0 ? -8 + (stop + 8) * sm(0.4, 3.0, t) : stop, walking = t < 2.85, kneel = t > 3.3;
+    const gone = sm(7.0, 8.6, t);
+    if (t < placed) sliver(c, R.SHARDS[5], fx + 3 + (t > 4.2 ? (HX - fx - 3) * sm(4.2, placed, t) : 0), kneel ? FL - 3 - (HY - FL + 3) * sm(4.2, placed, t) * 0 + (t > 4.2 ? (HY - (FL - 3)) * sm(4.2, placed, t) : 0) : FL - 4, 1, 4);
+    else if (t < placed + 0.4) glowAt(c, HX, HY, 30 * (1 - (t - placed) * 2), '167,124,255', (0.8 * (1 - (t - placed) * 2.5)).toFixed(3));
+    drawFig(c, R, t, fx, FL, { walking, kneel, alpha: 1 - gone });
+    for (let k = 0; k < 24; k++) { const u = (t - 7.0 - hash(k, 41) * 1.2); if (u < 0 || u > 1.6) continue; c.globalAlpha = 0.7 * (1 - u / 1.6); px(c, '#050307', fx - 3 + hash(k, 42) * 7 + Math.sin(u * 3 + k) * 2, FL - 2 - hash(k, 43) * 8 - u * 10, 2, 2); c.globalAlpha = 1; }
+    // the eye, high up in the dark: a slit that widens, a pale iris, a pupil that finds the heart
+    const open = sm(8.8, 10.2, t);
+    if (open > 0) {
+      const EX = Math.round(W * 0.5), EY = 12, ew = 9, eh = Math.max(0.5, 3.2 * open);
+      glowAt(c, EX, EY, 16, '230,226,244', (0.25 * open).toFixed(3));
+      for (let i = -ew; i <= ew; i++) { const hh = Math.round(eh * Math.sqrt(Math.max(0, 1 - (i * i) / (ew * ew)))); if (hh > 0) px(c, '#e6e2f4', EX + i, EY - hh, 1, hh * 2); }
+      if (open > 0.5) { px(c, '#1a1024', EX - 1, EY - 1, 2, 3); }
+    }
+  }
+
+  const SKITS = [skit0, skit1, skit2, skit3, skit4, skit5];
+  let OFF = null;
+  function draw(ctx, i, t, LW, LH, R) {
+    const fw = Math.min(LW - 24, 300), fh = Math.min(LH - 70, 150), x0 = Math.round((LW - fw) / 2), y0 = Math.round(LH * 0.42 - fh / 2);
+    const a = sm(0, 0.9, t) * (1 - sm(DUR[i] - 0.9, DUR[i], t));
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, LW, LH);
+    // (drawn at half size and blown up twice over: a close view, the figure as large as the Dweller is in play, larger)
+    const sw = Math.ceil(fw / 2), shh = Math.ceil(fh / 2);
+    if (!OFF || OFF.width !== sw || OFF.height !== shh) { OFF = document.createElement('canvas'); OFF.width = sw; OFF.height = shh; }
+    const oc = OFF.getContext('2d'); oc.imageSmoothingEnabled = false; oc.globalAlpha = 1; oc.globalCompositeOperation = 'source-over'; oc.clearRect(0, 0, sw, shh);
+    SKITS[i](oc, R, t, sw, shh);
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = false; ctx.drawImage(OFF, 0, 0, sw, shh, x0, y0, sw * 2, shh * 2); ctx.restore();
+    // the frame's edges sink into the dark
+    ctx.save(); ctx.globalAlpha = 1;
+    for (const [gx, gy, gw, gh, horiz, flip] of [[x0, y0, fw, 26, false, false], [x0, y0 + fh - 26, fw, 26, false, true], [x0, y0, 40, fh, true, false], [x0 + fw - 40, y0, 40, fh, true, true]]) {
+      const g = horiz ? ctx.createLinearGradient(gx, 0, gx + gw, 0) : ctx.createLinearGradient(0, gy, 0, gy + gh);
+      g.addColorStop(flip ? 1 : 0, 'rgba(0,0,0,1)'); g.addColorStop(flip ? 0 : 1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(gx, gy, gw, gh);
+    }
+    ctx.globalAlpha = 1 - a; ctx.fillStyle = '#000'; ctx.fillRect(x0, y0, fw, fh);
+    ctx.restore();
+    return { x: x0, y: y0, w: fw, h: fh, a };
+  }
+
+  global.DwellerSkits = { draw, DUR, LINE, count: SKITS.length };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
 <script>/* DWELLER — game shell: loop, input, camera, the map of the descent, screens. */
 (function () {
   'use strict';
@@ -8704,6 +9089,7 @@ window.DWELLER_DEEP = [
     return m[k] || '';
   }
   addEventListener('keydown', (ev) => {
+    if (SKIT) { if (SKIT.t > 0.6) endSkit(); ev.preventDefault(); return; }
     const e = { code: keyCode(ev), repeat: ev.repeat, metaKey: ev.metaKey, altKey: ev.altKey, preventDefault() { ev.preventDefault(); } };
     if (e.metaKey || e.altKey) return;
     const k = KEYMAP[e.code];
@@ -8721,7 +9107,7 @@ window.DWELLER_DEEP = [
       if (e.code === 'KeyN') townInteract(true);
       if (e.code === 'Escape') toTitle();
     } else if (mode === 'win') {
-      if (e.code === 'KeyN' || e.code === 'KeyR') { startLevel(cur, true); return; }
+      if (e.code === 'KeyN' || e.code === 'KeyR') { if (skitNext >= 0) { const i = skitNext; skitNext = -1; playSkit(i, () => startLevel(cur, true)); return; } startLevel(cur, true); return; }
       if (e.code === 'Escape' || e.code === 'KeyQ') { toTown(cur); return; }
       if (winT > 2.5 && (e.code === 'Enter' || e.code === 'Space')) toTown(cur);
     } else if (mode === 'play') {
@@ -8825,6 +9211,7 @@ window.DWELLER_DEEP = [
   }
   canvas.addEventListener('pointerdown', (e) => {
     audioInit(); grabFocus();
+    if (SKIT) { if (SKIT.t > 0.6) endSkit(); return; }
     if (e.pointerType === 'touch') { touchMode = true; document.body.classList.add('touch'); }
     const r = canvas.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
@@ -9037,6 +9424,8 @@ window.DWELLER_DEEP = [
   }
   function doorX(i) { return i >= NL ? T.GREAT.x : T.doorShape(T.DOORS[i]).x; }
   function toTown(focus) {
+    if (SKIT) return;
+    if (skitNext >= 0 && mode === 'win') { const i = skitNext; skitNext = -1; playSkit(i, () => toTown(focus)); return; }
     leaveKept();
     ARCH = null;
     if (!tW) tW = T.build();
@@ -9063,6 +9452,8 @@ window.DWELLER_DEEP = [
 
   function townNear() {
     const px = tS.x + 2.5, feet = tS.y + tS.h;
+    // in the flooded well: a sliver's glint on the water over you
+    if (P.wellUsed && feet > T.WATERY && feet > T.GY + 20) for (let k = 0; k < 6; k++) if (P.beaten[k] && Math.abs(px - T.MEMX[k]) < 6) return { k: 'memory', i: k, x: T.MEMX[k], y: T.WATERY - 22 };
     if (feet > T.GY + 20) return Math.abs(px - T.RAREX) < 14 && feet > T.RAREY - 8 ? { k: 'rare', x: T.RAREX, y: T.RAREY - 34 } : null;
     for (const d of T.DOORS) {
       const sh = T.doorShape(d);
@@ -9093,6 +9484,7 @@ window.DWELLER_DEEP = [
     } else if (near.k === 'res') {
       const L = LINES[near.q.id](); talk[near.q.id] = ((talk[near.q.id] || 0) + 1) % L.length; A.Live.sfx('ui');
     } else if (near.k === 'rare') wakeRare();
+    else if (near.k === 'memory') { A.Live.sfx('hush'); playSkit(near.i, null); }
   }
   /* the sleeper under the well: a bonus seeker, any one of SEEKER NET you do not have yet. Once per save it wakes,
      joins your Codex and follows you */
@@ -9155,6 +9547,7 @@ window.DWELLER_DEEP = [
   }
   function townFrame(dt) {
     if (!tW) { tW = T.build(); townSpawn(); }
+    if (SKIT) { tAcc = 0; return; }          // (the town waits while a memory plays)
     mapT += dt; townMsgT += dt; rareCardT += dt; titleOut += dt; bootFade += dt;
     const stepDt = 1 / D.TICK;
     tAcc += dt; let n = 0;
@@ -9236,7 +9629,7 @@ window.DWELLER_DEEP = [
     const LH7 = Math.ceil(7 * HS) + 3;          // one line of half-size text, with its gap
     T.draw(ctx, {
       text: (t, x, y, c, al) => ht(t, x, y, c, al, 1), s: tS, camX: tcamX + sx, camY: tcamY, camY0, LW, LH, time: gameTime, dt, P, still, fuse: fuseT, flare,
-      inRoom: tS.y + tS.h > (T.WELL.room[2] + 1) * D.TS,
+      inRoom: tS.y + tS.h > (T.WELL.room[2] + 1) * D.TS, memNear: near && near.k === 'memory' ? near.i : -1,
       unlocked: (i) => built(i) && unlocked(i), cand: (i) => P.cand[i], candIgn, rareId: rareChoice(), rareUsed: !!P.wellUsed, coatNew: coatWaiting() ? coatsOpen()[coatsOpen().length - 1] : null, oldId: 0,
     });
     const cx = Math.round(tcamX + sx), cy = Math.round(tcamY);
@@ -9289,6 +9682,9 @@ window.DWELLER_DEEP = [
           lines.push(['YOU WEAR:  ' + cur.name + '   -   ' + n + ' OF ' + COATS.length + ' CLOAKS', '#8ea0b4']);
           if (n > 1) lines.push([key + '  ANOTHER CLOAK', PAL.gold, true]);
         } else if (L.length > 1 || reacting) lines.push([key + '  MORE', '#5d6474', false, -1]);
+      } else if (near.k === 'memory') {
+        lines.push([ROMAN[near.i] + '  ' + NAMES[near.i], R.SHARDS[near.i]]);
+        lines.push([key + '  REMEMBER', PAL.gold, true]);
       } else if (near.k === 'rare') {
         if (P.wellUsed) lines.push(['THE CAVE IS EMPTY NOW', '#7f9aa6']);
         else {
@@ -9706,7 +10102,12 @@ window.DWELLER_DEEP = [
    * stump there; up to three go on the altar and come with you into The Deep. The Ninth stays in the rift and is
    * always with you. */
   const RLX = window.DwellerRelic;
-  let RLM = null;
+  let RLM = null, SKIT = null, skitNext = -1;      // (SKIT: the sliver skit playing, { i, t, then }; skitNext: one owed, shown on leaving the win)
+  /* a sliver's skit: a few wordless seconds of what it saw, the first time it is found; then on to wherever you were going */
+  function playSkit(i, then) { for (const k in keys) keys[k] = false; releaseTouch();
+    playSkit2(i, then); }
+  function playSkit2(i, then) { SKIT = { i, t: 0, then, pad: true }; A.Live.setPaused(true); A.Live.sfx('skit'); }
+  function endSkit() { const f = SKIT && SKIT.then; SKIT = null; A.Live.setPaused(false); if (f) f(); }
   function nearRelicGate() { if (!ARCH || !P.core) return false; const G = gateL(); return Math.abs(S.x + 2.5 - G.x) < 10 && S.onG && Math.abs(S.y + S.h - G.y) < 4; }
   // the arch, built as the Kept Room's is: lit from within by a soft teal light, with nine candles spaced evenly round it
   // (up one side, over the top and down the other), one for each relic, its wax in that relic's colour and lit once the relic is found;
@@ -10378,7 +10779,7 @@ window.DWELLER_DEEP = [
       candWin = nw[0] || nw[1] ? { i: cur, k: nw } : null;
       P.beaten[cur] = true; delete P.cp[cur]; saveProgress();
       noteEvent({ kind: 'level', lv: cur, won: true, deaths: S.deaths });
-      if (first) flare = { i: cur, t: -0.4, pending: true };
+      if (first) { flare = { i: cur, t: -0.4, pending: true }; if (cur < 6 && window.DwellerSkits) skitNext = cur; }
     }
   }
   function puff(st, n, k) {
@@ -10546,6 +10947,14 @@ window.DWELLER_DEEP = [
       if (RUN || mode === 'deepOver' || mode === 'deepWin' || mode === 'deepChoose') drawDeepHUD(ctx);
       }
     }
+    if (SKIT) {     // a sliver's skit, over everything (any key skips it)
+      SKIT.t += dt; HT.length = 0;
+      const SK = window.DwellerSkits, box = SK.draw(ctx, SKIT.i, SKIT.t, LW, LH, R), la = Math.min(1, Math.max(0, (SKIT.t - SK.DUR[SKIT.i] + 3.8) / 0.9)) * box.a;
+      if (la > 0) ht(SK.LINE[SKIT.i], LW / 2, box.y + box.h + 12, '#c9d6e0', 'center', la, 2 * uiZ());
+      if (SKIT.t > 1.2) ht(touchMode ? 'TAP TO SKIP' : 'ANY KEY TO SKIP', LW - 8, LH - 10, '#3d4450', 'right', 0.8);
+      if (SKIT.t > 0.6) { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) if (gp && gp.buttons.some(b => b.pressed)) { if (!SKIT.pad) { endSkit(); break; } } else if (gp) SKIT.pad = false; }
+      if (SKIT && SKIT.t >= SK.DUR[SKIT.i]) endSkit();
+    }
     if (setOpen) { setT += dt; HT.length = 0; drawSettings(ctx); }      // (only the settings' own words over the dimmed screen)
     gctx.imageSmoothingEnabled = false;
     gctx.fillStyle = '#000'; gctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -10554,7 +10963,7 @@ window.DWELLER_DEEP = [
     if (mode === 'title' || mode === 'town') {
       if (bootFade < 2.5) { gctx.globalAlpha = 1 - bootFade / 2.5; gctx.fillStyle = '#000'; gctx.fillRect(0, 0, canvas.width, canvas.height); gctx.globalAlpha = 1; }
     }
-    drawCard();
+    if (!SKIT) drawCard();
   }
   /* the section's name: small and low, clear of the corner lines, gone in three seconds (drawn at screen resolution so the letters stay crisp),
      no band behind it, only a faint one-pixel shadow so it reads over light */
@@ -10728,7 +11137,7 @@ window.DWELLER_DEEP = [
       get arch() { return ARCH; }, get pauseSel() { return pauseSel; }, pauseRowAt(i) { const g = PB, r = canvas.getBoundingClientRect(); return [(g.x + 20) / LW * r.width + r.left, (g.top + i * g.rh + 3) / LH * r.height + r.top]; }, codex(id) { toCodex(id); },
       deepRoom(id, tier) { startDeep(); RUN.rooms = [id, id]; RUN.tier = tier || 0; loadDeepRoom(0); },   // (for checking the rooms)
       deepRelic(id, relicId, tier) { startDeep(); RUN.rooms = [id, id]; RUN.tier = tier || 0; RUN.relic = { id: relicId, room: 0, got: false }; loadDeepRoom(0); },   // (a room with its relic hidden in it)
-      relicRoom() { toRelic(); }, newRun() { startDeep(); return { rooms: RUN.rooms.slice(), relic: RUN.relic, tier: RUN.tier }; }, winNow() { deepWinNow(); }, ninth() { tryNinth(); }, get relicGate() { return gateL(); }, get keptGate() { return gate(); }, get rlm() { return RLM; }, get run() { return RUN; },
+      relicRoom() { toRelic(); }, skit(i) { playSkit(i || 0, null); }, get skitState() { return SKIT; }, get skitNext() { return skitNext; }, newRun() { startDeep(); return { rooms: RUN.rooms.slice(), relic: RUN.relic, tier: RUN.tier }; }, winNow() { deepWinNow(); }, ninth() { tryNinth(); }, get relicGate() { return gateL(); }, get keptGate() { return gate(); }, get rlm() { return RLM; }, get run() { return RUN; },
     };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
