@@ -1,4 +1,4 @@
-DWELLER: iPhone OFFLINE EDITION, v17.2 (a one-off copy; it will not get updates)
+DWELLER: iPhone OFFLINE EDITION, v17.3 (a one-off copy; it will not get updates)
 
 iPhone can only install a web game from a web address (https), so this folder has to be put online once.
 After it is installed on your Home Screen it plays with no connection at all, full screen, and keeps your saves.
@@ -15,7 +15,7 @@ After it is installed on your Home Screen it plays with no connection at all, fu
 
 Saves live inside the installed app (separate from Safari). Deleting the icon deletes the saves.
 
-This is v17.2: everything up to now, including the new opening (and V on the title to watch it again), the ending
+This is v17.3: everything up to now, including the new opening (and V on the title to watch it again), the ending
 after the Core, their piano music and sounds, sounds in every cutscene, new music in The Deep, the RECORDS page in the pause menu, the first-SEEKER scene that teaches E,
 the thread scenes in The Deep, the sliver skits and their replay in the flooded well, and the smoke menus.
 On the title screen, TAP HERE - THE OPENING plays the opening again, and TAP HERE - RECORDS shows your records.
