@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>DWELLER (iPhone offline v16.5)</title>
+<title>DWELLER (iPhone offline v16.9)</title>
 <!-- iPhone offline edition: a one-off copy that installs to the Home Screen and plays with no connection -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -4913,7 +4913,9 @@ window.DWELLER_DEEP = [
     { tr: 1, score: 'core', pad: 'glass', drone: 1.2, wind: 0.5, windF: 600, echo: [0.75, 0.4, 2000], gain: 1.0 },
     // THE DEEP: one score for the whole run, low and descending in nines and elevens; it gathers a layer for every
     // stretch of the way down and its heart beats faster the nearer you are to the bottom (Live.deep.k, 0..1)
-    { tr: 9 / 16, score: 'deep', pad: 'choir', drone: 1.15, wind: 0.55, windF: 340, echo: [1.0, 0.46, 1600], gain: 1.1 },
+    { tr: 9 / 16, score: 'deep', pad: 'none', drone: 0, wind: 0.5, windF: 340, echo: [1.5, 0.5, 1700], gain: 1.2 },
+    // THE CODEX's great room: the old score of The Deep, at its top
+    { tr: 9 / 16, score: 'codex', pad: 'choir', drone: 1.15, wind: 0.55, windF: 340, echo: [1.0, 0.46, 1600], gain: 1.1 },
   ];
 
   function hz(ratio, oct) { return F0 * ratio * Math.pow(2, oct); }
@@ -4970,9 +4972,29 @@ window.DWELLER_DEEP = [
       this.echo.connect(this.echoLP); this.echoLP.connect(this.echoFb); this.echoFb.connect(this.echo); this.echoLP.connect(this.revSend);
       this.echoOut = c.createGain(); this.echoOut.gain.value = 0.5; this.echoLP.connect(this.echoOut); this.echoOut.connect(this.musicBus);
       this.energy = 0.2; this.fear = 0; this.rootIdx = 0; this.seedBase = 1; this.fl = FLAVOURS[0];
-      this.buildDrone(); this.buildWind(); this.buildFear();
+      this.buildDrone(); this.buildWind(); this.buildFear(); this.buildSpace();
       this.pad = null; this.padTime = -99;
     }
+
+    /* the open places (the town, the Codex's great room) get more air around their music: a side-to-side echo a
+       dotted eighth apart (half a second at 90 BPM), darker on each return, and a long hall. It is fed from the
+       whole score and stays shut (0) everywhere else; setSpace opens it */
+    buildSpace() {
+      const c = this.ctx, inp = this.spaceIn = c.createGain(); inp.gain.value = 0; this.musicBus.connect(inp);
+      const pan = (v) => { if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = v; return p; } return c.createGain(); };
+      const dA = c.createDelay(2), dB = c.createDelay(2); dA.delayTime.value = dB.delayTime.value = BEAT * 0.75;
+      const fA = c.createGain(), fB = c.createGain(); fA.gain.value = fB.gain.value = 0.38;
+      const lA = c.createBiquadFilter(), lB = c.createBiquadFilter(); lA.type = lB.type = 'lowpass'; lA.frequency.value = 2200; lB.frequency.value = 1700;
+      const send = c.createGain(); send.gain.value = 0.42; inp.connect(send); send.connect(dA);
+      dA.connect(lA); lA.connect(fA); fA.connect(dB); dB.connect(lB); lB.connect(fB); fB.connect(dA);
+      const pL = pan(-0.6), pR = pan(0.6), eo = c.createGain(); eo.gain.value = 0.55;
+      lA.connect(pL); lB.connect(pR); pL.connect(eo); pR.connect(eo); eo.connect(this.musicVol);
+      const hall = c.createConvolver(); hall.buffer = makeIR(c, 6.0, 2.1, 31);
+      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 120;
+      const hs = c.createGain(); hs.gain.value = 0.5; inp.connect(hs); eo.connect(hs); hs.connect(hp); hp.connect(hall);
+      const hw = c.createGain(); hw.gain.value = 0.55; hall.connect(hw); hw.connect(this.musicVol);
+    }
+    setSpace(t, on) { this.spaceIn.gain.cancelScheduledValues(t); this.spaceIn.gain.setTargetAtTime(on ? 1 : 0, t, 0.8); }
 
     osc(type, f, dest, g) {
       const o = this.ctx.createOscillator(); o.type = type; o.frequency.value = f;
@@ -5031,12 +5053,14 @@ window.DWELLER_DEEP = [
       if (this.pad && this.rootIdx === idx) return;
       this.rootIdx = idx;
       const c = this.ctx;
+      const none = this.fl.pad === 'none';          // (The Deep's score holds its own chords)
       if (this.pad) {
         const old = this.pad;
         old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0, t + 5);
         old.stop = t + 5.2;
         for (const o of old.oscs) { try { o.stop(t + 5.3); } catch (e) { } }
       }
+      if (none) { this.pad = null; return; }
       const g = c.createGain(); g.gain.value = 0; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + 4.5);
       const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; lp.Q.value = 0.5;
       g.connect(lp); const out = c.createGain(); out.gain.value = 0.0; lp.connect(out); out.connect(this.musicBus);
@@ -5081,8 +5105,8 @@ window.DWELLER_DEEP = [
       const tc = 0.6;
       const d = p.duck === undefined ? 1 : p.duck;
       const fl = this.fl || {};
-      this.droneGain.gain.setTargetAtTime((0.32 + 0.18 * e) * d * (fl.drone || 1), t, tc);
-      this.windGain.gain.setTargetAtTime((0.085 + 0.05 * (1 - e)) * d * (fl.wind || 1), t, tc);
+      this.droneGain.gain.setTargetAtTime((0.32 + 0.18 * e) * d * (fl.drone === undefined ? 1 : fl.drone), t, tc);
+      this.windGain.gain.setTargetAtTime((0.085 + 0.05 * (1 - e)) * d * (fl.wind === undefined ? 1 : fl.wind), t, tc);
       this.fearGain.gain.setTargetAtTime(0.14 * f * f * d, t, 0.25);
       if (this.pad) { this.pad.out.gain.setTargetAtTime((0.20 + 0.30 * e) * d, t, tc); this.pad.lp.frequency.setTargetAtTime(520 + 1100 * e, t, 1.5); }
       this.droneLP.frequency.setTargetAtTime(210 + 340 * e + 200 * f, t, 1.2);
@@ -5408,8 +5432,9 @@ window.DWELLER_DEEP = [
         th: [0.08 + jit(), 0.18 + jit(), 0.32 + jit(), 0.46 + jit(), 0.58 + jit(), 0.7 + jit(), 0.84 + jit() * 0.5],
       });
     }
-    score_deep(t, n, e) {
-      const D = Live.deep || { k: 0 }, k = D.k, r = this.rnd, s8 = n % 8, V = this.deepVariant(D.seed), th = V.th;
+    // (the Codex's great room plays the old score of The Deep, at its top)
+    score_codex(t, n, e) {
+      const D = { k: 0 }, k = 0, r = this.rnd, s8 = n % 8, V = this.deepVariant(Live.deep && Live.deep.seed), th = V.th;
       const v = 0.6 + 0.4 * e;
       // the heart: slow at the top, faster and harder the deeper you are
       const hb = k < 0.3 ? 8 : k < 0.75 ? 4 : 2;
@@ -5437,6 +5462,131 @@ window.DWELLER_DEEP = [
       }
       // the bottom: a chord at every bar
       if (k >= 0.97 && s8 === 0) [0, 4, 5].forEach((d, j) => this.bell(t + j * 0.05, fold(F0 * this.pick(d) * 8, 280, 900), 0.45, 4.5));
+    }
+
+    /* ---------------------------------------------------------------- THE DEEP
+       A minor piece in the Seeker tuning, one for the whole run, that grows darker and bigger with each stratum.
+       Its scale, on a tonic of 27 Hz (48 x 9/16) and its octaves: 1, 9/8, 19/16 (the minor third), 171/128 (the
+       fourth), 3/2, 51/32 (the minor sixth), 57/32 (the minor seventh), and 15/8 (the raised seventh, for the
+       dominant). Every pitch is still 48 Hz x X / 2^N. A theme of eight bars over four chords; each stratum has its own
+       progression and adds what it adds:
+         I    i  VI  iv  i     the theme on bells, far off, every other time round; a low pad; air
+         II   i  VI  III VII   the theme sung (a breathy lead), its echo an octave up; long low roots; the choir
+         III  i  iv  VI  V     an answering theme on alternate rounds, arpeggios, a bass that walks, the great drum
+         IV   i  VI  VII V     everything, doubled in octaves; strings trembling; drums on one and three; the heart racing
+       Before every chord a sound swells up out of nothing and stops dead on the beat, like a bell played backwards, and a
+       bigger one marks each new stratum. k (Live.deep.k) is how far down the run you are, 0..1 */
+    dn(deg, oct) {                   // a scale degree (6.5 is the raised seventh; 7 and up go on into the next octave)
+      const DS = [1, 9 / 8, 19 / 16, 171 / 128, 3 / 2, 51 / 32, 57 / 32];
+      if (deg === 6.5) return F0 * this.fl.tr * 15 / 8 * Math.pow(2, oct);
+      const o = Math.floor(deg / 7), d = ((deg % 7) + 7) % 7;
+      return F0 * this.fl.tr * DS[d] * Math.pow(2, oct + o);
+    }
+    // a sung line: soft attack, a breath of saw under a warm triangle, vibrato that comes in late; into the echo and the hall
+    deepLead(t, f, vel, dur, bright, light) {
+      const c = this.ctx, g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + Math.min(0.35, dur * 0.25));
+      g.gain.setValueAtTime(vel, t + dur * 0.75); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.6);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = f * (bright ? 5 : 3.2); lp.Q.value = 0.9;
+      const v = c.createOscillator(); v.frequency.value = 4.8; const vg = c.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.009, t + Math.max(0.4, dur * 0.6)); v.connect(vg);
+      for (const [type, a, det] of light ? [['triangle', 1, 0]] : [['triangle', 1, 0], ['sine', 0.6, -3], ['sawtooth', 0.16, 4]]) {
+        const o = c.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det; vg.connect(o.frequency);
+        const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(lp); o.start(t); o.stop(t + dur + 0.8);
+      }
+      v.start(t); v.stop(t + dur + 0.8);
+      lp.connect(g); g.connect(this.musicBus);
+      const e = c.createGain(); e.gain.value = 0.45; g.connect(e); e.connect(this.echo);
+      const r = c.createGain(); r.gain.value = 0.8; g.connect(r); r.connect(this.revSend);
+    }
+    // a chord held for its two bars: low voices that breathe in, sing as a choir from the second stratum on
+    deepPad(t, freqs, dur, s) {
+      const c = this.ctx, g = c.createGain(), att = 1.6, rel = 3.2;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + att); g.gain.setValueAtTime(1, t + dur); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + rel);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = [420, 700, 1100, 1700][s]; lp.Q.value = 0.6;
+      let into = lp;
+      if (s >= 1) {   // the choir: saw voices through two formants ('ah')
+        const f1 = c.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 760; f1.Q.value = 5;
+        const f2 = c.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1150; f2.Q.value = 7;
+        const mix = c.createGain(); mix.gain.value = 1.6 + 0.3 * s; f1.connect(mix); f2.connect(mix); mix.connect(lp);
+        into = c.createGain(); into.connect(f1); into.connect(f2); const dry = c.createGain(); dry.gain.value = 0.35; into.connect(dry); dry.connect(lp);
+      }
+      const vol = [0.035, 0.05, 0.062, 0.068][s];
+      freqs.forEach((f, i) => {
+        for (const [type, a, det] of [['sawtooth', 1, -5 + i * 3], ['triangle', 1.4, 4 - i * 2]]) {
+          const o = c.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det;
+          const og = c.createGain(); og.gain.value = vol * a / freqs.length * 2; o.connect(og); og.connect(into); o.start(t); o.stop(t + dur + rel + 0.1);
+        }
+      });
+      if (s >= 3) {   // the strings tremble in the last stratum
+        const tl = c.createOscillator(); tl.frequency.value = 6; const tg = c.createGain(); tg.gain.value = 0.35; tl.connect(tg); const tr = c.createGain(); tr.gain.value = 0.65; tg.connect(tr.gain);
+        lp.connect(tr); tr.connect(g); tl.start(t); tl.stop(t + dur + rel + 0.1);
+      } else lp.connect(g);
+      g.connect(this.musicBus); const r = c.createGain(); r.gain.value = 0.7; g.connect(r); r.connect(this.revSend);
+      // and under it all, the root held low (The Deep's own drone, in its key)
+      const so = c.createOscillator(); so.type = 'sine'; so.frequency.value = freqs[0]; const sg = c.createGain(); sg.gain.value = 0.0001;
+      sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime([0.025, 0.05, 0.08, 0.11][s], t + att); sg.gain.setValueAtTime([0.025, 0.05, 0.08, 0.11][s], t + dur); sg.gain.exponentialRampToValueAtTime(0.0001, t + dur + rel);
+      so.connect(sg); sg.connect(this.musicBus); so.start(t); so.stop(t + dur + rel + 0.1);
+    }
+    // a note that grows out of nothing and stops dead on the beat (tEnd), like a bell played backwards, with the air
+    // drawn in behind it
+    revSwell(tEnd, f, vel, dur) {
+      const c = this.ctx, t0 = tEnd - dur, g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vel, tEnd - 0.015); g.gain.linearRampToValueAtTime(0.0001, tEnd + 0.03);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t0); lp.frequency.exponentialRampToValueAtTime(5200, tEnd);
+      for (const [m, a] of [[1, 1], [2, 0.45], [3, 0.18], [4.01, 0.1]]) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f * m; const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(lp); o.start(t0); o.stop(tEnd + 0.06); }
+      const s = c.createBufferSource(); s.buffer = this.noise; const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.Q.value = 0.8;
+      nf.frequency.setValueAtTime(220, t0); nf.frequency.exponentialRampToValueAtTime(4200, tEnd);
+      const ng = c.createGain(); ng.gain.value = 0.55; s.connect(nf); nf.connect(ng); ng.connect(lp); s.start(t0, this.rnd() * 2); s.stop(tEnd + 0.06);
+      lp.connect(g); g.connect(this.musicBus);
+      const e = c.createGain(); e.gain.value = 0.35; g.connect(e); e.connect(this.echo);
+      const r = c.createGain(); r.gain.value = 0.9; g.connect(r); r.connect(this.revSend);
+    }
+    score_deep(t, n, e) {
+      const D = Live.deep || { k: 0 }, k = Math.max(0, Math.min(1, D.k || 0)), r = this.rnd;
+      const s = Math.min(3, Math.floor(k * 4)), sp = k * 4 - s, p = n % 64, bar = Math.floor(p / 8), s8 = p % 8, round = Math.floor(n / 64);
+      const I = [0, 2, 4], VI = [5, 7, 9], III = [2, 4, 6], VII = [6, 8, 10], iv = [3, 5, 7], V = [4, 6.5, 8];
+      const PROG = [[I, VI, iv, I], [I, VI, III, VII], [I, iv, VI, V], [I, VI, VII, V]][s];
+      const ch = PROG[Math.floor(p / 16)], next = PROG[(Math.floor(p / 16) + 1) % 4];
+      const v = 0.75 + 0.25 * e;
+      // a new stratum: a great swell out of silence, and the floor drops out under it
+      if (this._dvS !== s) { if (this._dvS !== undefined && s > this._dvS) { this.revSwell(t + STEP * 6, this.dn(0, 4), 0.09, STEP * 6); this.revSwell(t + STEP * 6, this.dn(4, 3), 0.06, STEP * 6); this.taiko(t + STEP * 6, 0.9, 30); this.noiseHit(t + STEP * 6, BEAT * 8, 'lowpass', 900, 60, 0.12, 0.7, 0.02); } this._dvS = s; }
+      // the chord, held for its two bars
+      if (p % 16 === 0) this.deepPad(t, ch.map((d, i) => this.dn(d, i ? 2 : 1)).concat(s >= 2 ? [this.dn(ch[0], 3)] : []), STEP * 16, s);
+      // the roots: long and low from the second stratum; walking from the third; driving eighths in the last
+      if (s >= 1 && p % 16 === 0) this.pluckBass(t, this.dn(ch[0], 1), 0.5 * v, STEP * (s >= 2 ? 3 : 14));
+      if (s === 2 && (s8 === 3 || s8 === 6)) this.pluckBass(t, this.dn(s8 === 3 ? ch[2] : ch[0] + 7, 1), 0.38 * v, STEP * 2.5);
+      if (s === 3 && p % 16 !== 0) this.pluckBass(t, this.dn([ch[0], ch[0], ch[0] + 7, ch[0], ch[2], ch[0], ch[0] + 7, ch[1]][s8], 1), (s8 % 2 ? 0.22 : 0.32) * v, STEP * 0.9);
+      // the heart: slow, then quicker, then racing
+      const hb = [16, 8, 4, 2][s];
+      if (n % hb === 0) { const hv = 0.1 + 0.1 * s; this.thump(t, 40, hv, 0.5); if (hb > 2) this.thump(t + 0.19, 40, hv * 0.55, 0.3); }
+      // the air: a slow breath every two bars
+      if (p % 16 === 8) this.noiseHit(t, BEAT * 7, 'lowpass', 140, 360 + 260 * s, 0.035 + 0.015 * s, 0.9, BEAT * 3);
+      // backwards swells into every chord change (from the second stratum, two at once in the last)
+      if (s >= 1 && p % 16 === 10) { this.revSwell(t + STEP * 6, this.dn(next[0] + 14, 2), 0.035 + 0.01 * s, STEP * 6); if (s === 3) this.revSwell(t + STEP * 6, this.dn(next[2], 3), 0.025, STEP * 6); }
+      if (s === 0 && p === 58) this.revSwell(t + STEP * 6, this.dn(7, 3), 0.03, STEP * 6);
+      // the theme. In the first stratum it rings far off on bells, every other time round; from the second it is sung;
+      // in the third an answering theme alternates with it; in the last it is doubled in octaves and the bells answer it
+      const A = [[0, 4, 4], [4, 5, 2], [6, 4, 2], [8, 2, 6], [14, 0, 2], [16, 7, 4], [20, 6, 2], [22, 5, 2], [24, 4, 8], [32, 3, 4], [36, 4, 2], [38, 5, 2], [40, 6, 4], [44, 5, 2], [46, 4, 2], [48, 'L', 4], [52, 8, 4], [56, 'E', 8]];
+      const B = [[0, 9, 4], [4, 8, 2], [6, 7, 2], [8, 4, 6], [14, 5, 2], [16, 7, 6], [22, 9, 2], [24, 8, 8], [32, 10, 4], [36, 9, 2], [38, 8, 2], [40, 7, 4], [44, 6, 2], [46, 5, 2], [48, 'L', 4], [52, 4, 4], [56, 'E', 8]];
+      const lastV = PROG[3] === V, theme = s >= 2 && round % 2 === 1 ? B : A;
+      const play = s > 0 || round % 2 === 0;
+      for (const [at, d0, len] of theme) {
+        if (at !== p || !play) continue;
+        const d = d0 === 'L' ? (lastV ? 6.5 : 6) : d0 === 'E' ? (s >= 2 ? 8 : 7) : d0, dur = STEP * len;
+        if (s === 0) this.bell(t, this.dn(d, 3), 0.45, Math.max(2.4, dur * 1.5));
+        else {
+          this.deepLead(t, this.dn(d, 2), 0.05 + 0.008 * s, dur, s >= 3);
+          if (s === 1 || s === 3) this.bell(t + STEP * 3, this.dn(d, 3), 0.22 + 0.06 * s, 2.6);          // its echo an octave up
+          if (s >= 3) this.deepLead(t, this.dn(d, 3), 0.026, dur, true, true);                             // and doubled
+        }
+      }
+      // arpeggios through the chord, up and back, from the third stratum (sixteenths in the last)
+      if (s >= 2) { const arp = [0, 1, 2, 3, 2, 1, 0, 1].map(i => i < 3 ? ch[i] : ch[0] + 7); if (n % 2 === 0) { const i = (n / 2) % 8; this.glassPing(t, this.dn(arp[i], s >= 3 && i % 2 ? 5 : 4), 0.3 + 0.05 * s, 1.0); } }
+      // the great drum, and in the last stratum ticks running between
+      if (s >= 2) { if (s8 === 0) this.taiko(t, 0.45 + 0.05 * s, 32); if (s === 3 && s8 === 4) this.taiko(t, 0.34, 36); }
+      if (s === 3 && n % 2 === 1 && r() < 0.5 + 0.4 * sp) this.tick(t, 0.18 + 0.12 * sp, 2200 + 1600 * r());
+      // the bottom: the tonic chord in bells at every bar, and the lowest A held
+      if (k >= 0.97 && s8 === 0) [0, 2, 4, 7].forEach((d, j) => this.bell(t + j * 0.06, this.dn(d, 3), 0.42, 5));
     }
 
     /* ----------------------------------------------------------- sound effects */
@@ -5471,7 +5621,7 @@ window.DWELLER_DEEP = [
         const o = c.createOscillator(); o.type = type; o.frequency.value = f * m; o.detune.value = det;
         const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(lp); o.start(t); o.stop(t + dur + 0.1);
       }
-      lp.connect(g); g.connect(dest); const s = c.createGain(); s.gain.value = 0.6; g.connect(s); s.connect(this.revSend);
+      lp.connect(g); g.connect(dest); const s = c.createGain(); s.gain.value = 0.25; g.connect(s); s.connect(this.revSend);
       // the felt of the hammer: a breath of noise as the note is struck
       const n = c.createBufferSource(); n.buffer = this.noise; const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = Math.min(4000, f * 3); nf.Q.value = 1;
       const ng = c.createGain(); ng.gain.setValueAtTime(vel * 0.1, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
@@ -5491,9 +5641,34 @@ window.DWELLER_DEEP = [
       const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + dur * 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g); g.connect(dest); const s = c.createGain(); s.gain.value = 0.8; g.connect(s); s.connect(this.revSend); o.start(t); o.stop(t + dur + 0.1);
     }
+    /* the piano's own room for the opening and the ending: a soft echo that crosses from side to side a dotted eighth
+       apart (two thirds of a second at 67.5 BPM), darker on each return, and a long hall behind it all */
+    pianoRoom(dest) {
+      const c = this.ctx, inp = c.createGain();
+      const pan = (v) => { if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = v; return p; } return c.createGain(); };
+      const dry = c.createGain(); dry.gain.value = 0.85; inp.connect(dry); dry.connect(dest);
+      // the echo: left, then right, then left again, each a little quieter and duller
+      const dl = 0.75 * 60 / 67.5, dA = c.createDelay(3), dB = c.createDelay(3); dA.delayTime.value = dl; dB.delayTime.value = dl;
+      const fA = c.createGain(), fB = c.createGain(); fA.gain.value = 0.42; fB.gain.value = 0.42;
+      const lpA = c.createBiquadFilter(), lpB = c.createBiquadFilter(); lpA.type = lpB.type = 'lowpass'; lpA.frequency.value = 2400; lpB.frequency.value = 1900;
+      const send = c.createGain(); send.gain.value = 0.5; inp.connect(send); send.connect(dA);
+      dA.connect(lpA); lpA.connect(fA); fA.connect(dB); dB.connect(lpB); lpB.connect(fB); fB.connect(dA);
+      const pL = pan(-0.65), pR = pan(0.65), eo = c.createGain(); eo.gain.value = 0.6;
+      lpA.connect(pL); lpB.connect(pR); pL.connect(eo); pR.connect(eo); eo.connect(dest);
+      // the hall: long, soft, a little dark; the echoes go into it too
+      const hall = c.createConvolver(); hall.buffer = makeIR(c, 6.5, 2.0, 23);
+      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 140;
+      const hs = c.createGain(); hs.gain.value = 0.55; inp.connect(hs); eo.connect(hs); hs.connect(hp); hp.connect(hall);
+      const hw = c.createGain(); hw.gain.value = 0.7; hall.connect(hw); hw.connect(dest);
+      return inp;
+    }
     cine(id, t0, dest, sdest) {
-      const n = (o, i) => F0 * Math.pow(2, o) * PALETTE[i], B = 60 / 67.5, pn = (b, o, i, v, d) => this.cinePiano(t0 + b, n(o, i), v, d || 3.5, dest);
+      const room = id === 'opening' || id === 'ending' ? this.pianoRoom(dest) : dest;
+      const n = (o, i) => F0 * Math.pow(2, o) * PALETTE[i], B = 60 / 67.5, pn = (b, o, i, v, d) => this.cinePiano(t0 + b, n(o, i), v, d || 3.5, room);
       sdest = sdest || dest;
+      // (the quieter scenes' sounds are lifted so they sit with the rest)
+      const lift = { sliver0: 2.4, sliver1: 2.6, sliver2: 2.6, sliver3: 1.1, sliver4: 2.2, sliver5: 1.2, seeker: 1.8, seeker2: 1.8 }[id];
+      if (lift) { const g = this.ctx.createGain(); g.gain.value = lift; g.connect(sdest); sdest = g; }
       const sfxN = (t, dur, type, f0, f1, vel, q) => this.sfxNoise(t0 + t, dur, type, f0, f1, vel, q, sdest), sfxT = (t, f0, f1, dur, vel, type) => this.sfxTone(t0 + t, f0, f1, dur, vel, type, sdest);
       // the opening's first melody: snow falling past the windows (also the ending's last scene, the same town)
       const snow = (s, upto) => {
@@ -5506,11 +5681,12 @@ window.DWELLER_DEEP = [
       if (id === 'opening') {
         this.cineAir(t0, 13, 520, 0.012, dest);                                 // wind over the town
         snow(0.4, 11);
-        // the crack under the mountain: a deep blow, the rock giving, and six glass notes thrown up through it
+        // the crack under the mountain: a deep blow, the rock giving; the crystal's six voices come out low and close
+        // together, rubbing against each other, and sink as they ring (nothing bright in it); under it a dark chord
         sfxT(10.6, 64, 30, 1.8, 0.32, 'sine'); sfxT(10.6, 96, 48, 1.2, 0.16, 'triangle');
-        sfxN(10.6, 1.6, 'lowpass', 2400, 120, 0.3, 0.8); sfxN(10.7, 2.4, 'lowpass', 300, 60, 0.12, 0.6);
-        for (let k = 0; k < 6; k++) sfxT(10.62 + k * 0.045, n(5, k), n(5, k) * 1.004, 2.2 - k * 0.15, 0.035, 'sine');
-        pn(10.7, 0, 0, 0.13, 7); pn(10.7, 1, 0, 0.1, 7); pn(10.7, 1, 4, 0.08, 7);
+        sfxN(10.6, 1.6, 'lowpass', 1600, 100, 0.3, 0.8); sfxN(10.7, 2.8, 'lowpass', 260, 50, 0.14, 0.6);
+        [[3, 3, 1], [3, 2, 1.012], [3, 2, 1], [2, 5, 1], [3, 0, 1.009], [3, 0, 1]].forEach(([o, i, d], k) => sfxT(10.64 + k * 0.07, n(o, i) * d, n(o, i) * d * 0.9, 3.0 - k * 0.2, 0.03, k % 2 ? 'triangle' : 'sine'));
+        pn(10.7, 0, 0, 0.13, 7.5); pn(10.7, 1, 2, 0.09, 7.5); pn(10.7, 0, 5, 0.07, 7.5);
         // the second scene (it starts 13.2 in): the calling, a soft note again and again as the seam creeps nearer
         const S2 = 13.2;
         [[0.9, 0.035], [2.7, 0.045], [4.4, 0.06]].forEach(([b, v]) => { pn(S2 + b, 3, 0, v, 3); pn(S2 + b + 0.02, 4, 0, v * 0.4, 2.5); });
@@ -5529,8 +5705,10 @@ window.DWELLER_DEEP = [
         call(4.6, 2, 0.08, B * 1.3);
         // it walks into the light; it comes apart: a shimmer like breath on glass, rising, and the thread's notes
         pn(8.4, 3, 4, 0.07, 4); pn(9.1, 3, 5, 0.065, 4);
-        sfxN(9.8, 1.8, 'highpass', 6000, 1200, 0.045, 0.7);
-        for (let k = 0; k < 8; k++) sfxT(9.85 + k * 0.12, n(5, k % 6) * (k > 5 ? 2 : 1), n(5, k % 6) * (k > 5 ? 2 : 1) * 1.01, 1.4, 0.02, 'sine');
+        // (as it goes: a long breath darkening as it fades, and low tones sinking away under it, one after another)
+        sfxN(9.8, 2.6, 'lowpass', 2600, 140, 0.05, 0.6);
+        [[4, 5], [4, 3], [4, 2], [3, 5], [3, 3], [3, 2], [3, 0]].forEach(([o, i], k) => sfxT(9.85 + k * 0.17, n(o, i), n(o, i) * 0.8, 1.9, 0.017, 'triangle'));
+        this.cineBloom(t0 + 9.9, n(1, 2), 0.022, 3.4, dest); this.cineBloom(t0 + 9.9, n(1, 3) * 1.004, 0.014, 3.4, dest);
         // and the answer: down from the octave and home, the fifth come to rest on the root
         pn(10.6, 4, 0, 0.07, 4); pn(11.3, 3, 5, 0.07, 4); pn(12.0, 3, 4, 0.075, 4); pn(12.7, 3, 2, 0.07, 4); pn(13.6, 3, 0, 0.085, 6.5); pn(13.6, 1, 0, 0.09, 7); pn(13.6, 2, 4, 0.06, 7);
         // the second scene (it starts 16 in): the town again, and the opening's own melody over it; then the call,
@@ -5539,6 +5717,87 @@ window.DWELLER_DEEP = [
         this.cineAir(t0 + S2, 13, 520, 0.012, dest);
         snow(S2 + 0.6, 9);
         call(S2 + 9.4, 3, 0.08);
+      } else if (id === 'seeker' || id === 'seeker2') {
+        // ---- the first SEEKER. It waits for E at 9.2, so it is told in two: up to the eye's stare (which hums on, however
+        //  long you take), and, from the moment you press E, the rest
+        const step = (t, v) => { sfxN(t, 0.09, 'lowpass', 650, 180, 0.045 * (v || 1), 0.8); sfxN(t + 0.01, 0.04, 'bandpass', 2400, 1800, 0.008 * (v || 1), 1.5); };
+        const blip = (t, f, v, d) => { sfxT(t, f, f, d || 0.08, v, 'square'); };
+        const chime = (t, f, v, d) => { sfxT(t, f, f, d || 1.4, v, 'sine'); sfxT(t, f * 2, f * 2, (d || 1.4) * 0.55, v * 0.3, 'sine'); };
+        const hold = (t, f, vel, type, q) => {       // a sound that holds until the scene stops it
+          const c = this.ctx, src = c.createBufferSource(); src.buffer = this.noise; src.loop = true;
+          const bf = c.createBiquadFilter(); bf.type = type; bf.frequency.value = f; bf.Q.value = q || 0.7;
+          const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0 + t); g.gain.exponentialRampToValueAtTime(vel, t0 + t + 0.4);
+          src.connect(bf); bf.connect(g); g.connect(sdest); src.start(t0 + t, this.rnd() * 2); src.stop(t0 + t + 120);
+        };
+        if (id === 'seeker') {
+          for (let t = 0.5; t < 2.4; t += 0.5) step(t + this.rnd() * 0.04, 0.9);
+          sfxN(2.7, 0.35, 'lowpass', 450, 180, 0.03, 0.7);                                   // it kneels
+          this.cineBloom(t0 + 2.8, n(3, 0), 0.01, 2.2, dest);                                 // the visor's light on the glass
+          blip(3.5, n(5, 0), 0.012, 0.1); blip(3.56, n(5, 4), 0.008, 0.05);                  // the screen flickers
+          blip(4.15, n(5, 0), 0.014, 0.12); blip(4.22, n(5, 2), 0.01, 0.06);                 // and again
+          [0, 2, 4].forEach((i, j) => chime(4.8 + j * 0.12, n(5, i), 0.02, 1.6));            // and wakes
+          this.cineBloom(t0 + 5.2, n(4, 0), 0.008, 3.4, dest); this.cineBloom(t0 + 5.2, n(4, 4), 0.006, 3.4, dest);   // its hum, as it rises
+          sfxN(6.2, 0.7, 'bandpass', 700, 1600, 0.02, 1.2); sfxN(7.0, 0.7, 'bandpass', 1600, 700, 0.02, 1.2);          // once round you
+          this.cineBloom(t0 + 7.6, n(1, 0), 0.03, 4, dest); this.cineBloom(t0 + 7.6, n(1, 5), 0.015, 4, dest);        // the eye, drifting in
+          hold(8.7, 4200, 0.02, 'highpass', 0.6); hold(8.7, 240, 0.03, 'lowpass');                                     // its light on you, burning
+        } else {
+          sfxN(0.0, 0.5, 'bandpass', 900, 2200, 0.03, 1.2);                                   // the SEEKER flies to it
+          sfxT(0.45, n(3, 4), n(2, 4), 1.4, 0.05, 'sine'); sfxN(0.45, 1.2, 'lowpass', 1500, 200, 0.05, 0.7);           // covers it: the light goes out
+          chime(0.6, n(4, 0), 0.02, 2.6);
+          this.cineBloom(t0 + 1.4, n(3, 0), 0.01, 5, dest); this.cineBloom(t0 + 1.4, n(3, 4), 0.007, 5, dest);        // quiet, after
+        }
+      } else if (/^sliver[0-5]$/.test(id)) {
+        // ---- the six sliver scenes: only sounds, quiet, timed to what is seen (each scene's own clock from t0)
+        const step = (t, v) => { sfxN(t, 0.09, 'lowpass', 650, 180, 0.045 * (v || 1), 0.8); sfxN(t + 0.01, 0.04, 'bandpass', 2400, 1800, 0.008 * (v || 1), 1.5); };
+        const walk = (a, b, every) => { for (let t = a; t < b; t += every || 0.5) step(t + this.rnd() * 0.04, 0.8 + this.rnd() * 0.4); };
+        const chime = (t, f, v, d) => { sfxT(t, f, f, d || 1.4, v, 'sine'); sfxT(t, f * 2, f * 2, (d || 1.4) * 0.55, v * 0.3, 'sine'); };
+        const thump = (t, v) => { sfxT(t, 66, 38, 0.2, 0.3 * v, 'sine'); sfxN(t, 0.12, 'lowpass', 260, 70, 0.07 * v, 0.7); };
+        const hum = (t, d, f, v) => this.cineBloom(t0 + t, f, v, d, sdest);
+        const ticks = (a, b, n, f, v) => { for (let k = 0; k < n; k++) sfxN(a + this.rnd() * (b - a), 0.03, 'highpass', f, f * 0.8, v * (0.5 + this.rnd()), 1.4); };
+        const clang = (t, f, v) => { for (const [m, a, d] of [[1, 1, 2.4], [2.76, 0.5, 1.6], [5.4, 0.28, 1.0], [8.93, 0.14, 0.6]]) sfxT(t, f * m, f * m * 0.998, d, v * a, 'sine'); sfxN(t, 0.08, 'bandpass', 3500, 2000, v * 0.6, 1); };
+        const k = +id.slice(6);
+        if (k === 0) {          // I: ice. Steps; drips; the lamp's cold hum turning onto the figure, holding, turning away
+          walk(0.5, 4.2); walk(6.5, 10, 0.5);
+          for (let i = 0; i < 6; i++) chime(0.8 + i * 1.6 + this.rnd() * 0.5, n(6, [0, 4, 2, 5, 1, 3][i]), 0.008, 0.6);
+          hum(2.4, 2.6, n(2, 0), 0.03); hum(2.4, 2.6, n(2, 4) * 1.003, 0.015);
+          hum(4.4, 1.4, n(4, 0), 0.03); sfxN(4.5, 1.0, 'highpass', 4200, 3000, 0.025, 0.6);      // the light on it: a thin sizzle
+          hum(5.4, 2.6, n(2, 4), 0.022);
+        } else if (k === 1) {   // II: spores. Steps; it sits; the mushrooms brighten (soft rising notes); the nearest one flickers and dies
+          walk(0.5, 3.4); sfxN(3.6, 0.4, 'lowpass', 500, 200, 0.03, 0.7);
+          [3.8, 4.2, 4.6, 5.0, 5.4].forEach((t, i) => chime(t, n(4, [0, 1, 2, 4, 5][i]), 0.012, 1.8));
+          ticks(5.6, 7.0, 14, 3000, 0.012);
+          sfxT(6.0, n(4, 2), n(3, 0), 1.4, 0.02, 'sine'); sfxN(6.6, 0.8, 'lowpass', 400, 90, 0.035, 0.6);
+        } else if (k === 2) {   // III: glass. Steps; the reflection appears (a glassy swell); it takes a step you hear through the glass; a glint
+          walk(0.5, 3.6);
+          hum(3.2, 2.4, n(5, 2), 0.012); hum(3.3, 2.4, n(5, 4), 0.008); sfxN(3.2, 2.0, 'bandpass', 5000, 6500, 0.01, 2);
+          [5.5, 6.0].forEach(t => sfxN(t, 0.1, 'lowpass', 380, 140, 0.035, 0.9));
+          chime(6.9, n(6, 4), 0.02, 1.6); chime(6.95, n(6, 0), 0.01, 1.2);
+        } else if (k === 3) {   // IV: the forge. The hammer comes up creaking; a held breath; the blow; the crystal in six; sparks; pieces landing
+          this.cineAir(t0, 9, 260, 0.01, sdest);
+          sfxN(1.8, 2.0, 'bandpass', 600, 900, 0.012, 3);
+          clang(4.7, 220, 0.12); thump(4.7, 1.2);
+          for (let i = 0; i < 6; i++) chime(4.72 + i * 0.03, n(5, i), 0.03, 2.2 - i * 0.2);
+          ticks(4.75, 5.8, 22, 2600, 0.02);
+          for (let i = 0; i < 6; i++) chime(5.6 + i * 0.22 + this.rnd() * 0.1, n(6, i), 0.006, 0.4);
+        } else if (k === 4) {   // V: the pit. A low heat; each sliver let go, falling, and far below its own note as it reaches its light
+          this.cineAir(t0, 11, 180, 0.016, sdest);
+          for (let i = 0; i < 5; i++) {
+            const t = 2.2 + i * 1.15;
+            sfxN(t, 0.05, 'bandpass', 3000, 2500, 0.01, 2);
+            sfxT(t + 0.05, n(5, i) * 1.06, n(5, i) * 0.94, 1.0, 0.006, 'sine');
+            chime(t + 1.25, n(4, i), 0.018, 2.6);
+          }
+        } else if (k === 5) {   // VI: the heart. Its beat, steady; it kneels; the sliver goes in; the beat stumbles, stops, comes back
+          //  slow; the figure goes into the shadow; high above, an eye opens
+          const lub = (t, v) => { thump(t, v); thump(t + 0.16, v * 0.55); };
+          for (let t = 0.0; t < 5.2; t += 1 / 1.2) lub(t, 0.6);
+          walk(0.5, 2.9); sfxN(3.3, 0.35, 'lowpass', 450, 180, 0.025, 0.7);
+          chime(5.2, n(5, 5), 0.03, 2.4); chime(5.2, n(4, 5), 0.02, 2.4);
+          for (let t = 5.2; t < 6.4; t += 1 / 2.6) lub(t, 0.75);
+          for (let t = 7.6; t < 12; t += 1 / 0.8) lub(t, 0.5);
+          sfxN(7.0, 1.6, 'lowpass', 800, 120, 0.03, 0.6);
+          hum(8.8, 3.4, n(1, 0), 0.05); hum(8.8, 3.4, n(1, 1) * 1.002, 0.03); sfxN(8.9, 1.2, 'bandpass', 300, 160, 0.02, 2);
+        }
       }
     }
     sfx(name, t, a) {
@@ -5599,6 +5858,7 @@ window.DWELLER_DEEP = [
         this.eng.setParams(this.ctx.currentTime, { energy: 0.2, fear: 0 });
         this.eng.setRoot(this.ctx.currentTime, 0);
         if (this.themeIdx !== undefined) this.setTheme(this.themeIdx);
+        this.eng.setSpace(this.ctx.currentTime, this.space !== false);
         this.setVolumes(this.vol[0], this.vol[1]);
         this.started = true;
         this.t0 = this.ctx.currentTime;
@@ -5626,6 +5886,8 @@ window.DWELLER_DEEP = [
       this.eng.applyRoom(this.ctx.currentTime);
       this.eng.setRoot(this.ctx.currentTime + 0.05, Math.max(0, idx));
     },
+    // the town and the Codex's great room are open places (more echo and hall); everywhere else is close
+    setSpace(on) { this.space = !!on; if (this.eng) this.eng.setSpace(this.ctx.currentTime, this.space); },
     setMood(e, rootIdx) {
       if (!this.eng) return;
       this.params.energy = e;
@@ -5831,7 +6093,7 @@ window.DWELLER_DEEP = [
     return ctx.startRendering();
   }
 
-  global.DwellerAudio = { Live, Engine, renderTrack, PALETTE, F0, BEAT, STEP, hz };
+  global.DwellerAudio = { Live, Engine, renderTrack, PALETTE, F0, BEAT, STEP, hz, FLAVOURS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 <script>/* DWELLER — THE DEEP: the rules of the endless descent below the Codex.
@@ -9614,7 +9876,7 @@ window.DWELLER_DEEP = [
     return m[k] || '';
   }
   addEventListener('keydown', (ev) => {
-    if (SKIT) { if (SKIT.wait && keyCode(ev) === 'KeyE') { SKIT.wait = false; SKIT.taught = true; } else if (SKIT.skip && SKIT.t > 0.6) { A.Live.cineStop(0.6); endSkit(); } ev.preventDefault(); return; }
+    if (SKIT) { if (SKIT.wait && keyCode(ev) === 'KeyE') { skitGo(); } else if (SKIT.skip && SKIT.t > 0.6) { A.Live.cineStop(0.6); endSkit(); } ev.preventDefault(); return; }
     const e = { code: keyCode(ev), repeat: ev.repeat, metaKey: ev.metaKey, altKey: ev.altKey, preventDefault() { ev.preventDefault(); } };
     if (e.metaKey || e.altKey) return;
     const k = KEYMAP[e.code];
@@ -9695,7 +9957,7 @@ window.DWELLER_DEEP = [
      down for good.) None of this touches the keyboard or a gamepad. */
   const tbtn = {}, held = new Map();      // pointerId -> button id
   let touchHeld = false;
-  function setTouch(id, v) { if (v && id === 'E' && SKIT && SKIT.wait) { SKIT.wait = false; SKIT.taught = true; } if (v && LATCH[id]) latch |= LATCH[id]; touch[id] = v; if (tbtn[id]) tbtn[id].classList.toggle('on', v); }
+  function setTouch(id, v) { if (v && id === 'E' && SKIT && SKIT.wait) { skitGo(); } if (v && LATCH[id]) latch |= LATCH[id]; touch[id] = v; if (tbtn[id]) tbtn[id].classList.toggle('on', v); }
   function syncHeld() { const on = new Set(held.values()); for (const id in touch) if (touch[id] !== on.has(id)) setTouch(id, on.has(id)); touchHeld = held.size > 0; }
   function releaseTouch() { if (!held.size && !touchHeld) return; held.clear(); for (const id in touch) if (touch[id]) setTouch(id, false); touchHeld = false; }
   function fingerUp(e) { if (held.delete(e.pointerId)) syncHeld(); }
@@ -9740,7 +10002,7 @@ window.DWELLER_DEEP = [
   }
   canvas.addEventListener('pointerdown', (e) => {
     audioInit(); grabFocus();
-    if (SKIT) { if (SKIT.wait) { SKIT.wait = false; SKIT.taught = true; } else if (SKIT.skip && SKIT.t > 0.6) { A.Live.cineStop(0.6); endSkit(); } return; }
+    if (SKIT) { if (SKIT.wait) { skitGo(); } else if (SKIT.skip && SKIT.t > 0.6) { A.Live.cineStop(0.6); endSkit(); } return; }
     if (e.pointerType === 'touch') { touchMode = true; document.body.classList.add('touch'); }
     const r = canvas.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
@@ -9863,7 +10125,7 @@ window.DWELLER_DEEP = [
       for (let k = 1; k <= sv.cp; k++) R.markTether(k, -99);
     }
     mode = 'play'; sectionIdx = -1; cardT = 99; snapCamera();
-    A.Live.setTheme(i);
+    A.Live.setTheme(i); A.Live.setSpace(false);
     A.Live.sfx('start');
     A.Live.setPaused(false);
     syncTouchUI();
@@ -9965,10 +10227,10 @@ window.DWELLER_DEEP = [
     mode = 'town'; townMsgT = 99; R.parts.length = 0; if (tWet) { tWet = false; A.Live.muffle(false); }
     candIgn = candWin ? { i: candWin.i, k: candWin.k, t0: gameTime + 1.0 } : null; candWin = null;
     townSpawn(focus === undefined ? undefined : doorX(focus) + (focus >= NL ? 0 : 0));
-    A.Live.setTheme(-1); A.Live.setMood(0.12, 0);
+    A.Live.setTheme(-1); A.Live.setMood(0.12, 0); A.Live.setSpace(true);
     syncTouchUI();
   }
-  function toTitle() { leaveKept(); mode = 'title'; titleT = 3; titleOut = 99; syncTouchUI(); }
+  function toTitle() { leaveKept(); A.Live.setSpace(true); mode = 'title'; titleT = 3; titleOut = 99; syncTouchUI(); }
   // the ending's two scenes, once ever (after the drop past the Core): the thread it leaves is what the weaver's first coat is made of
   function playEnding(done) { A.Live.cine('ending'); playSkit(15, () => playSkit(16, () => { A.Live.cineStop(); P.ended = true; saveProgress(); if (done) done(); })); }
   // the opening can be watched again from the title by any save past its first start (a save from before the opening
@@ -9978,7 +10240,7 @@ window.DWELLER_DEEP = [
   function playOpening(replay, done) { A.Live.cine('opening'); playSkit(13, () => { playSkit(14, () => { A.Live.cineStop(); if (done) done(); }); if (replay) SKIT.skip = true; }); if (replay) SKIT.skip = true; }
   function beginTown() { if (mode !== 'title' || SKIT) return;
     // a new save opens on two scenes: the light going down into the mountain, and the Dweller called after it
-    if (!P.opened && window.DwellerSkits && !P.beaten.some(Boolean) && !Object.keys(P.cp).length) { P.opened = true; saveProgress(); playOpening(false, () => beginTown()); return; } for (const k in keys) keys[k] = false; latch = 0; mode = 'town'; titleOut = 0; syncTouchUI(); A.Live.sfx('ui'); }
+    if (!P.opened && window.DwellerSkits && !P.beaten.some(Boolean) && !Object.keys(P.cp).length) { P.opened = true; saveProgress(); playOpening(false, () => beginTown()); return; } for (const k in keys) keys[k] = false; latch = 0; mode = 'town'; titleOut = 0; A.Live.setSpace(true); syncTouchUI(); A.Live.sfx('ui'); }
 
   function townCamTarget() {
     const px = tS.x + 2.5, py = tS.y + tS.h;
@@ -10349,7 +10611,7 @@ window.DWELLER_DEEP = [
     if (P.relicCarry && P.relicCarry.length) { for (const id of P.relicCarry) gain(id); P.relicCarry = null; saveProgress(); }   // KEEPSAKE: last run's upgrades
     if (RUN.load.includes(0)) { const u = DP.offer(Math.random, RUN.picks, 1)[0]; if (u) gain(u.id); }                          // PLUMB LINE: one to start   // one spare life a run: the last tether catches you once   // each descent its own music, and its own order of keys
     P.deepRuns++; saveProgress();
-    A.Live.setTheme(7); A.Live.deep = { k: 0, seed: RUN.music };
+    A.Live.setTheme(7); A.Live.setSpace(true); A.Live.deep = { k: 0, seed: RUN.music };
     loadDeepRoom(0);
   }
   function loadDeepRoom(i) {
@@ -10552,7 +10814,7 @@ window.DWELLER_DEEP = [
     ARCH = { focus: -1, shut: 0, iris: 0, swap: null, place: null, cycle: 0, ovI: 0, t: 0, ePrev: !!at, wake: 0 };
     if (P.core && allCandles() && !P.keptOpen) { ARCH.wake = gameTime + 1.2; P.keptOpen = true; }
     mode = 'play'; sectionIdx = -1; cardT = 99; snapCamera();
-    A.Live.setTheme(7); A.Live.deep = { k: 0 }; A.Live.setMood(0.06, 0); A.Live.setPaused(false);
+    A.Live.setTheme(8); A.Live.deep = { k: 0 }; A.Live.setMood(0.06, 0); A.Live.setSpace(true); A.Live.setPaused(false);
     P.archSeen = true; P.archNew = false; saveProgress();
     syncTouchUI();
   }
@@ -10625,6 +10887,7 @@ window.DWELLER_DEEP = [
     archCandles(12).forEach(([x, y], k) => { const side = k < 6 ? 0 : 1, i = side ? 11 - k : k; disc(lc, mid + x + 1, bot + y - 4, P.cand[i][side] ? 12 : 5, P.cand[i][side] ? 0.55 : 0.18); });
   }
   function toKept() {
+    A.Live.setSpace(false);          // (its own room: only the town and the Codex's great room are open)
     const first = !P.keptSeen; P.keptSeen = true; saveProgress();
     ARCH = null; RUN = null;
     const room = KP.create(LW, LH, { first });
@@ -10650,8 +10913,10 @@ window.DWELLER_DEEP = [
   // a skit plays through; only a memory replayed in the well can be skipped (SKIT.skip)
   function playSkit(i, then) { for (const k in keys) keys[k] = false; releaseTouch();
     playSkit2(i, then); }
-  function playSkit2(i, then) { SKIT = { i, t: 0, then, pad: true }; A.Live.setPaused(true); if (i < 13) A.Live.sfx('skit'); }
-  function endSkit() { const f = SKIT && SKIT.then; SKIT = null; A.Live.setPaused(false); if (f) f(); }
+  function playSkit2(i, then) { SKIT = { i, t: 0, then, pad: true }; A.Live.setPaused(true); if (i < 13) A.Live.sfx('skit'); if (i < 6) A.Live.cine('sliver' + i); else if (i === 6) A.Live.cine('seeker'); }   // (the sliver scenes have their own sounds)
+  // the first SEEKER's scene goes on when you call it: its sounds from there start at that moment
+  function skitGo() { SKIT.wait = false; SKIT.taught = true; if (SKIT.i === 6) A.Live.cine('seeker2'); }
+  function endSkit() { if (SKIT && SKIT.i <= 6) A.Live.cineStop(1); const f = SKIT && SKIT.then; SKIT = null; A.Live.setPaused(false); if (f) f(); }
   function nearRelicGate() { if (!ARCH || !P.core) return false; const G = gateL(); return Math.abs(S.x + 2.5 - G.x) < 10 && S.onG && Math.abs(S.y + S.h - G.y) < 4; }
   // the arch, built as the Kept Room's is: lit from within by a soft teal light, with nine candles spaced evenly round it
   // (up one side, over the top and down the other), one for each relic, its wax in that relic's colour and lit once the relic is found;
@@ -10702,6 +10967,7 @@ window.DWELLER_DEEP = [
     relicCandles().forEach(([sx, sy], k) => disc(lc, mid + sx + 1, bot + sy - 4, P.relics.includes(k) ? 12 : 5, P.relics.includes(k) ? 0.55 : 0.18));
   }
   function toRelic() {
+    A.Live.setSpace(false);          // (its own room: only the town and the Codex's great room are open)
     ARCH = null; RUN = null;
     const room = RLX.create();
     world = D.makeWorld(room.level); cur = ARCHL;
@@ -11498,7 +11764,7 @@ window.DWELLER_DEEP = [
       if (SKIT.wait) uiPrompt(touchMode ? 'SEEK' : 'E', 'COVER THE EYE', LW / 2, box.y + box.h + 12, box.a, 2 * uiZ());
       if (SKIT.wait && window.__skitSeekerAt) { const sp = window.__skitSeekerAt; ht(touchMode ? 'TAP SEEK' : 'PRESS E', Math.round(box.x + sp[0] * 2), Math.round(box.y + sp[1] * 2) - 26, PAL.gold, 'center', box.a * (0.7 + 0.3 * Math.sin(gameTime * 4)), uiZ()); }
       else if (SKIT.skip && SKIT.t > 1.2) ht(touchMode ? 'TAP TO SKIP' : 'ANY KEY TO SKIP', LW - 8, LH - 10, '#3d4450', 'right', 0.8);
-      if (SKIT.t > 0.6) { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) if (gp && gp.buttons.some(b => b.pressed)) { if (!SKIT.pad) { SKIT.pad = true; if (SKIT.wait) { SKIT.wait = false; SKIT.taught = true; } else if (SKIT.skip) { A.Live.cineStop(0.6); endSkit(); } break; } } else if (gp) SKIT.pad = false; }
+      if (SKIT.t > 0.6) { const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) if (gp && gp.buttons.some(b => b.pressed)) { if (!SKIT.pad) { SKIT.pad = true; if (SKIT.wait) { skitGo(); } else if (SKIT.skip) { A.Live.cineStop(0.6); endSkit(); } break; } } else if (gp) SKIT.pad = false; }
       if (SKIT && SKIT.t >= SK.DUR[SKIT.i]) endSkit();
     }
     if (setOpen) { setT += dt; HT.length = 0; drawSettings(ctx); }      // (only the settings' own words over the dimmed screen)
