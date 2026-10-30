@@ -1,4 +1,4 @@
-DWELLER: iPhone OFFLINE EDITION, v18.0 (a one-off copy; it will not get updates)
+DWELLER: iPhone OFFLINE EDITION, v18.4 (a one-off copy; it will not get updates)
 
 iPhone can only install a web game from a web address (https), so this folder has to be put online once.
 After it is installed on your Home Screen it plays with no connection at all, full screen, and keeps your saves.
@@ -15,7 +15,8 @@ After it is installed on your Home Screen it plays with no connection at all, fu
 
 Saves live inside the installed app (separate from Safari). Deleting the icon deletes the saves.
 
-This is v18.0: everything up to now, including the sliver scenes set in their finales (with a real hammer and a
+This is v18.4: everything up to now, including the pause button in the town, new platforms for each place, a softer wall jump, volumes that start at half, a composed piece of music of its own for each of the six
+levels, the sliver scenes set in their finales (with a real hammer and a
 darker sound as the crystal breaks), the Deep's chest rooms dressed with a piece of each finale and a chest of its
 own for every stratum, a finale of its own for every level (the crystal hall, the Mother Cap, the Great Lens, the
 forge and its anvil, the buried sun, the Heart's beating heart), each place's own

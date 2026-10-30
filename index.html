@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>DWELLER (iPhone offline v18.0)</title>
+<title>DWELLER (iPhone offline v18.4)</title>
 <!-- iPhone offline edition: a one-off copy that installs to the Home Screen and plays with no connection -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -4879,6 +4879,56 @@ window.DWELLER_DEEP = [
       ctx.fillStyle = BONE[1]; ctx.fillRect(px, y + 2 + dy, 1, 1);
     }
   }
+  /* the shelves (one-way platforms), each place's own: 1, a slab with depth, shaped for it (the Foundry's girders, Ember
+     Deep's basalt); 2, segments with what hangs from them (the Mycelium's rootwood planks, the Glass Garden's tiles of
+     crystal, the Heart's bones). You stand on the top edge and jump up through them, as ever */
+  const SHELF_OF = { fungal: 2, glass: 2, foundry: 1, ember: 1, heart: 2 };
+  function drawShelf(ctx, st, x, y, ww, kind, time, r) {
+    const R = (X, Y, W, H, c, a) => { if (W <= 0 || H <= 0) return; ctx.globalAlpha = a === undefined ? 1 : a; ctx.fillStyle = c; ctx.fillRect(X, Y, W, H); ctx.globalAlpha = 1; };
+    const rgb = (k, f) => 'rgb(' + TH.tile[k].map(v => Math.round(Math.min(255, v * (f || 1)))).join(',') + ')';
+    const hz = (i, j) => hash2(r[0] * 7 + i, r[1] * 13 + j);
+    const taper = (i, n) => Math.min(1, Math.min(i, ww - 1 - i) / n);
+    if (kind === 1) {
+      if (st === 'fungal') {                 // a bracket fungus: a lit cap, gills under it, the ends rounded down
+        for (let i = 0; i < ww; i++) { const d = 2 + Math.round(3 * Math.sqrt(taper(i, 5))); R(x + i, y, 1, d, TH.tuft[0]); R(x + i, y + d - 1, 1, 1, TH.near); if (i % 2 && d > 3) R(x + i, y + 2, 1, d - 3, TH.near, 0.55); }
+        R(x + 1, y, ww - 2, 1, TH.tuft[1]); R(x + 3, y + 1, ww - 6, 1, TH.tuft[1], 0.45);
+      } else if (st === 'glass') {          // a slab of crystal, its underside cut in facets, a glint along it
+        for (let i = 0; i < ww; i++) { const d = 2 + Math.round((2 + (i % 6 < 3 ? i % 3 : 3 - i % 3)) * taper(i, 3)); R(x + i, y, 1, d, TH.stal[1], 0.7); R(x + i, y + d - 1, 1, 1, TH.near, 0.5); if (i % 6 === 0) R(x + i, y + 1, 1, d - 1, TH.lamp[1], 0.35); }
+        R(x, y, ww, 1, TH.lamp[1]); const g = Math.floor(((time * 30) % (ww + 20)) - 10); if (g > 0 && g < ww) R(x + g, y, 2, 1, '#fff');
+      } else if (st === 'foundry') {        // a girder: flange, web with holes and rivets, flange
+        R(x, y, ww, 2, TH.stal[1]); R(x, y, ww, 1, rgb(2), 0.7); R(x + 1, y + 2, ww - 2, 2, TH.near); R(x, y + 4, ww, 1, TH.mid);
+        for (let i = 3; i < ww - 3; i += 6) { R(x + i, y + 2, 2, 2, TH.mid, 0.9); R(x + i + 3, y + 1, 1, 1, rgb(2), 0.8); }
+      } else if (st === 'ember') {          // basalt, ragged under, its cracks glowing
+        for (let i = 0; i < ww; i++) { const d = 2 + Math.round((2 + Math.round(hz(i, 1) * 2)) * taper(i, 3)); R(x + i, y, 1, d, TH.near); R(x + i, y + 1, 1, 1, TH.mid); if (hz(i, 2) > 0.82 && d > 3) R(x + i, y + d - 1, 1, 1, '#ff7a3c', 0.6 + 0.3 * Math.sin(time * 2 + i)); }
+        R(x, y, ww, 1, rgb(2, 1.1), 0.75);
+      } else if (st === 'heart') {          // a band of sinew, thick at the ends where it is held, a vein along it
+        for (let i = 0; i < ww; i++) { const e = Math.min(i, ww - 1 - i), d = e < 2 ? 6 : 4 + (Math.sin((r[0] * 6 + i) * 0.21) > 0.6 ? 1 : 0); R(x + i, y - (e < 2 ? 1 : 0), 1, d, '#6e2c40'); R(x + i, y + d - (e < 2 ? 2 : 1), 1, 1, '#2a0e18'); R(x + i, y + 1, 1, 1, '#86324c'); }
+        R(x + 2, y, ww - 4, 1, '#b04866'); for (let i = 3; i < ww - 3; i++) if (Math.round(1.6 + Math.sin((r[0] * 6 + i) * 0.35)) === 2) R(x + i, y + 1, 1, 1, '#a0304c', 0.8);
+      } else { R(x, y, ww, 4, TH.stal[1]); R(x, y, ww, 1, '#94A6B1'); R(x, y + 3, ww, 1, TH.near); }
+      return;
+    }
+    // kind 2: segments, and what hangs from them
+    for (let k = 0; k * TS < ww; k++) {
+      const sx = x + k * TS, h1 = hz(k, 5), h2 = hz(k, 9);
+      if (st === 'fungal') {                // planks of rootwood, rootlets and moss hanging, a small cap now and then
+        R(sx, y, TS - 1, 3, '#5c402c'); R(sx, y, TS - 1, 1, '#7e5a3e'); R(sx, y + 2, TS - 1, 1, '#3a281c');
+        if (h1 > 0.35) { const L = 2 + Math.round(h2 * 4); R(sx + 1 + Math.round(h1 * 3), y + 3, 1, L, TH.tuft[0], 0.8); }
+        if (h2 > 0.8) { R(sx + 2, y - 2, 1, 2, '#c8c8be'); R(sx + 1, y - 3, 3, 1, TH.tuft[1]); }
+      } else if (st === 'glass') {          // tiles of crystal, points of it hanging
+        R(sx, y, TS - 1, 3, TH.stal[1], 0.75); R(sx, y, TS - 1, 1, TH.lamp[1]); R(sx + 1, y + 1, 1, 1, '#fff', 0.5);
+        if (h1 > 0.3) { const L = 2 + Math.round(h2 * 3); for (let j = 0; j < L; j++) R(sx + 2, y + 3 + j, j < L - 1 ? 2 : 1, 1, TH.stal[1], 0.7 - j * 0.1); }
+      } else if (st === 'foundry') {        // a grate in sections, struts down from its ends
+        R(sx, y, TS, 2, TH.stal[1]); R(sx, y, TS, 1, rgb(2), 0.7); R(sx + TS - 1, y, 1, 2, TH.near); R(sx + 2, y + 1, 1, 1, TH.near);
+        if (k === 0 || (k + 1) * TS >= ww) { const dir = k === 0 ? 1 : -1, bx = k === 0 ? sx + 1 : sx + TS - 2; for (let j = 0; j < 5; j++) R(bx + dir * j, y + 2 + j, 1, 1, TH.mid); }
+      } else if (st === 'ember') {          // blocks of stone, their seams glowing, a drip of heat under
+        R(sx, y, TS - 1, 3, TH.near); R(sx, y, TS - 1, 1, rgb(2, 1.1), 0.7); R(sx + TS - 1, y, 1, 3, '#ff7a3c', 0.55 + 0.25 * Math.sin(time * 2 + k));
+        if (h1 > 0.6) R(sx + 2, y + 3, 1, 1 + Math.round(h2 * 2), '#ff7a3c', 0.4);
+      } else if (st === 'heart') {          // bones, knuckled, tied by sinew
+        R(sx + 1, y, TS - 2, 3, '#c8b8a8'); R(sx + 1, y, TS - 2, 1, '#f0e6da'); R(sx, y + 1, 1, 1, TH.stal[1]); R(sx + TS - 1, y + 1, 1, 1, TH.stal[1]); R(sx + 1, y + 2, TS - 2, 1, '#8e7c6e');
+        if (h1 > 0.55) R(sx + 3, y + 3, 1, 1 + Math.round(h2 * 2), '#a0304c', 0.7);
+      } else { R(sx, y, TS - 1, 3, TH.stal[1]); R(sx, y, TS - 1, 1, '#94A6B1'); }
+    }
+  }
   function drawFeatures(ctx, w, s, camX, camY, W, H, time, post) {
     const L = w.level, st = TH.style, T = L.tiles || {};
     const vis = (x, y, ww, hh) => x + ww >= camX - 8 && x <= camX + W + 8 && y + hh >= camY - 8 && y <= camY + H + 8;
@@ -4952,6 +5002,7 @@ window.DWELLER_DEEP = [
         const x = Math.round(x0 - camX), y = Math.round(y0 - camY), rc = setAt(L, 'ribcage', r[0], r[1]);
         if (rc) { drawRib(ctx, w, r, rc, camX, camY); continue; }
         if (!vis(x0, y0, ww, TS)) continue;
+        const sk = SHELF_OF[st]; if (sk) { drawShelf(ctx, st, x, y, ww, sk, time, r); continue; }
         if (st === 'foundry') {
           ctx.fillStyle = TH.stal[1]; ctx.fillRect(x, y, ww, 2);
           ctx.fillStyle = dk; for (let i = 2; i < ww - 1; i += 3) ctx.fillRect(x + i, y + 1, 1, 1);
@@ -6560,18 +6611,18 @@ window.DWELLER_DEEP = [
   /* each level colours the same engine: a transposition (always a Seeker ratio, so the tuning holds),
      the register of the bells, and one voice of its own */
   const FLAVOURS = [
-    // I the descent: ice and bells over a heartbeat (the original score, unchanged)
-    { tr: 1, bellOct: 0, dens: 1, voice: '', score: 'descent' },
-    // II mycelium: warm and damp; a kalimba walks in threes against the bar, the caps breathe every six beats
-    { tr: 9 / 8, score: 'mycelium', gain: 1.3, pad: 'warm', drone: 0.55, wind: 0.6, windF: 300, echo: [0.75, 0.34, 1300] },
-    // III glass garden: a high music box in sixteenths, glass chimes, almost no low end
-    { tr: 19 / 16, score: 'glass', gain: 1.75, pad: 'glass', drone: 0.35, wind: 0.8, windF: 1400, echo: [0.5, 0.52, 4200] },
-    // IV foundry: a machine ostinato, anvils on the beat, steam on the off-beat, a whistle now and then
-    { tr: 3 / 4, score: 'foundry', pad: 'grind', drone: 1.0, wind: 0.5, windF: 700, echo: [0.25, 0.22, 2400] },
-    // V ember deep: slow and heavy; great drums, a mournful reed, embers crackling in the dark
-    { tr: 21 / 32, score: 'ember', gain: 0.8, pad: 'ember', drone: 1.25, wind: 0.45, windF: 220, echo: [1.5, 0.44, 900] },
-    // VI the heart: the pulse is the rhythm; blood rushes after every beat, a choir hums, and the beat sometimes stumbles
-    { tr: 7 / 8, score: 'heart', gain: 1.1, pad: 'choir', drone: 0.8, wind: 0.35, windF: 420, echo: [1.0, 0.3, 1500] },
+    // I the descent: ice and bells over a heartbeat, a flute of ice, strings and a choir far down (its piece: PIECES)
+    { tr: 1, bellOct: 0, dens: 1, voice: '', piece: 'descent', pad: 'none', drone: 0, wind: 0.8, gain: 1.7 },
+    // II mycelium: warm and damp; a kalimba walks the chords in threes against the bar, a hummed voice, soft drums
+    { tr: 9 / 8, piece: 'mycelium', gain: 1.9, pad: 'none', drone: 0, wind: 0.6, windF: 300, echo: [0.75, 0.34, 1300] },
+    // III glass garden: a glass harmonica over a music box in sixteenths, chimes at every chord, almost no low end
+    { tr: 19 / 16, piece: 'glass', gain: 2.2, pad: 'none', drone: 0, wind: 0.8, windF: 1400, echo: [0.5, 0.52, 4200] },
+    // IV foundry: a machine ostinato, anvils ringing the chords, strings driving, horns, the great drums
+    { tr: 3 / 4, piece: 'foundry', gain: 1.4, pad: 'none', drone: 0, wind: 0.5, windF: 700, echo: [0.25, 0.22, 2400] },
+    // V ember deep: slow and heavy; great drums and a hand drum, a mournful reed, a low choir, embers crackling
+    { tr: 21 / 32, piece: 'ember', gain: 1.4, pad: 'none', drone: 0, wind: 0.45, windF: 220, echo: [1.5, 0.44, 900] },
+    // VI the heart: the pulse is the rhythm; a choir, a single voice, a harp, strings trembling; it ends in the major
+    { tr: 7 / 8, piece: 'heart', gain: 1.6, pad: 'none', drone: 0, wind: 0.35, windF: 420, echo: [1.0, 0.3, 1500] },
     // VII the core: the battle; it builds with every sliver set (its own chords: no pad)
     { tr: 1, score: 'core', pad: 'none', drone: 0.25, wind: 0.3, windF: 600, echo: [0.75, 0.25, 2200], gain: 0.9 },
     // THE DEEP: one score for the whole run, low and descending in nines and elevens; it gathers a layer for every
@@ -6580,6 +6631,9 @@ window.DWELLER_DEEP = [
     // THE CODEX's great room: the old score of The Deep, at its top
     { tr: 9 / 16, score: 'codex', pad: 'choir', drone: 1.15, wind: 0.55, windF: 340, echo: [1.0, 0.46, 1600], gain: 1.1 },
   ];
+
+  // the town, the title and the opening keep the original score of the Descent (the level itself has its piece now)
+  const TOWNFL = { tr: 1, bellOct: 0, dens: 1, voice: '', score: 'descent' };
 
   function hz(ratio, oct) { return F0 * ratio * Math.pow(2, oct); }
   function fold(f, lo, hi) { while (f < lo) f *= 2; while (f >= hi) f /= 2; return f; }
@@ -6608,6 +6662,267 @@ window.DWELLER_DEEP = [
     return buf;
   }
 
+  /* ---------------------------------------------------------------- the six pieces
+     scales (each a mode of its own, every ratio X / 2^N):
+       the Descent: Dorian, cold and clear          the Mycelium: Mixolydian with the harmonic seventh, warm
+       the Glass Garden: Lydian, all wonder          the Foundry: minor, with the raised seventh to drive home
+       Ember Deep: the old mode with the augmented second (b2 and 3), mournful   the Heart: minor, ending major
+     themes: [step in the sixteen bars, degree of the scale (7 an octave up; 6.5 the raised seventh), length in steps] */
+  const SC = {
+    DOR: [1, 9 / 8, 19 / 16, 171 / 128, 3 / 2, 27 / 16, 57 / 32],
+    MIX: [1, 9 / 8, 5 / 4, 171 / 128, 3 / 2, 27 / 16, 7 / 4],
+    LYD: [1, 9 / 8, 5 / 4, 45 / 32, 3 / 2, 27 / 16, 15 / 8],
+    AEO: [1, 9 / 8, 19 / 16, 171 / 128, 3 / 2, 51 / 32, 57 / 32],
+    HIJ: [1, 17 / 16, 5 / 4, 171 / 128, 3 / 2, 51 / 32, 57 / 32],
+  };
+  // the call, from the opening: up the scale to the fifth, held over the seventh far below
+  const CALL = [[0, 0, 4], [4, 1, 4], [8, 2, 4], [12, 4, 20]];
+  const PADK = {
+    strings: { osc: [['sawtooth', 1, -6], ['sawtooth', 1, 7]], lp: 1000, att: 1.4, rel: 2.8, rev: 0.7 },
+    tremolo: { osc: [['sawtooth', 1, -6], ['sawtooth', 1, 7]], lp: 1300, att: 0.9, rel: 2.4, rev: 0.7, trem: 6, tremD: 0.35 },
+    choir: { osc: [['sawtooth', 1, -5], ['triangle', 1.2, 4]], formant: [760, 1150], lp: 2200, att: 1.6, rel: 3, rev: 0.8 },
+    oo: { osc: [['sawtooth', 0.8, -5], ['triangle', 1.4, 4]], formant: [380, 880], lp: 1600, att: 1.8, rel: 3.2, rev: 0.85 },
+    warm: { osc: [['triangle', 1, 0], ['sine', 0.6, 0, 2]], lp: 700, att: 1.2, rel: 2.5, rev: 0.5 },
+    glass: { osc: [['sine', 1, -3], ['sine', 0.5, 4, 2]], lp: 4000, att: 1.8, rel: 3.5, rev: 0.9, trem: 0.75, tremD: 0.3 },
+    grind: { osc: [['sawtooth', 1, -4], ['square', 0.3, 3]], lp: 420, q: 3, att: 0.8, rel: 1.5, rev: 0.4 },
+    ember: { osc: [['sawtooth', 1, -5], ['sine', 1.5, 0]], lp: 340, att: 2, rel: 3.5, rev: 0.5 },
+  };
+  const PIECES = {
+    /* I  THE DESCENT. Ice and bells over a heartbeat: a lone flute of ice, strings, the choir far down */
+    descent: {
+      scale: SC.DOR, oct: 3, callLow: 6,
+      chords: { i: [0, 2, 4], ii: [1, 3, 5], III: [2, 4, 6], IV: [3, 5, 7], v: [4, 6, 8], VII: [6, 8, 10] },
+      progA: ['i', 'VII', 'IV', 'i', 'i', 'VII', 'IV', 'v'],
+      progB: ['III', 'VII', 'IV', 'IV', 'III', 'VII', 'ii', 'v'],
+      themeA: [[0, 0, 2], [2, 1, 2], [4, 2, 2], [6, 4, 10], [16, 3, 6], [22, 2, 2], [24, 1, 8], [32, 5, 6], [38, 4, 2], [40, 3, 8], [48, 2, 4], [52, 4, 12],
+        [64, 0, 2], [66, 1, 2], [68, 2, 2], [70, 4, 4], [74, 7, 6], [80, 8, 6], [86, 7, 2], [88, 6, 8], [96, 5, 4], [100, 4, 2], [102, 3, 2], [104, 4, 4], [108, 3, 4], [112, 6, 4], [116, 4, 2], [118, 3, 2], [120, 1, 8]],
+      themeB: [[0, 4, 4], [4, 6, 4], [8, 9, 8], [16, 8, 6], [22, 7, 2], [24, 6, 8], [32, 5, 4], [36, 4, 2], [38, 5, 2], [40, 7, 8], [48, 8, 4], [52, 7, 12],
+        [64, 9, 4], [68, 6, 4], [72, 4, 8], [80, 6, 2], [82, 7, 2], [84, 8, 4], [88, 6, 8], [96, 5, 4], [100, 3, 4], [104, 1, 8], [112, 4, 4], [116, 3, 2], [118, 1, 2], [120, 4, 8]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 300), d, 'strings', 0.022 + 0.006 * Math.min(5, h.L));
+        if (h.L >= 4) this.chordPad(t, this.pvoice(h.ch, h.T, 420), d, 'oo', 0.03 + 0.008 * (h.L - 4));
+        if (h.L >= 6) this.chordPad(t, this.pvoice(h.ch, h.T, 620), d, 'choir', 0.03);
+        if (h.L >= 1) this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 70)[0], 0.42 + 0.06 * h.L, STEP * 14);
+      },
+      bed(t, h) {
+        const r = this.rnd;
+        if (h.m % 4 === 0) { const v = 0.2 + 0.2 * h.e + 0.03 * h.L; this.thump(t, 48, v, 0.5); this.thump(t + 0.2, 48, v * 0.55, 0.32); }   // the heartbeat under the ice
+        if (h.m % 2 === 0 && r() < [0.24, 0.27, 0.3, 0.27, 0.24, 0.2, 0.2][h.L]) this.bell(t, fold(h.T * h.ch[Math.floor(r() * h.ch.length)] * 16, 560, 1900), 0.26 + 0.2 * r(), 2.6);   // bells of ice, from the chord
+        if (r() < 0.04) this.bell(t + r() * STEP, fold(h.T * h.ch[Math.floor(r() * h.ch.length)] * 64, 1600, 3400), 0.1, 0.9);   // drips
+        if (h.s16 === 8) this.noiseHit(t, BEAT * 6, 'lowpass', 140, 420 + 120 * h.L, 0.03 + 0.008 * h.L, 0.9, BEAT * 2.5);   // the cold air
+        if (h.L >= 3 && h.s16 === 8) this.pluckBass(t, this.pvoice([h.ch[2]], h.T, 90)[0], 0.3, STEP * 6);
+        if (h.L >= 5) { if ([0, 3, 6].includes(h.s8)) this.thump(t, 72, 0.16 + 0.04 * (h.L - 4), 0.28); if ([2, 5, 7].includes(h.s8) && r() < 0.5) this.tick(t, 0.5, 1800 + 1800 * r()); }
+      },
+      lead(t, f, dur, h) {
+        if (h.L <= 1) { if (dur >= STEP * 4 || h.L === 1) this.bell(t, f * 2, 0.3 + 0.05 * h.L, Math.max(2.4, dur * 1.2)); return; }
+        this.flute(t, f, 0.03 + 0.006 * h.L, dur);
+        if (h.L >= 3) this.bell(t + STEP * 3, f * 2, 0.16, 2.4);
+        if (h.L >= 5) this.sung(t, f / 2, 0.018 + 0.004 * (h.L - 5), dur, 'oo');
+        if (h.L >= 6) this.flute(t, f * 2, 0.012, dur);
+      },
+      far(t, f, dur) { this.bell(t, f, 0.22, Math.max(2.4, dur)); },
+      call(t, f, dur, h, d, low) { if (low) this.sung(t, f, 0.03, dur, 'oo'); else if (h.L >= 3) this.flute(t, f, 0.036, dur); else this.bell(t, f * 2, 0.32, Math.max(2.4, dur)); },
+    },
+    /* II  THE MYCELIUM. Warm and damp: a kalimba walking the chords in threes against the bar, a hummed voice, soft drums */
+    mycelium: {
+      scale: SC.MIX, oct: 2, callLow: 6,
+      chords: { I: [0, 2, 4], I7: [0, 2, 4, 6], IV: [3, 5, 7], v: [4, 6, 8], ii: [1, 3, 5], vi: { r: [27 / 16, 2, 81 / 32] } },
+      progA: ['I', 'v', 'IV', 'I', 'I', 'v', 'ii', 'IV'],
+      progB: ['vi', 'IV', 'I', 'v', 'vi', 'IV', 'ii', 'I7'],
+      themeA: [[0, 4, 3], [3, 5, 3], [6, 4, 2], [8, 2, 4], [12, 0, 4], [16, 4, 6], [22, 6, 2], [24, 8, 8], [32, 7, 3], [35, 5, 3], [38, 3, 2], [40, 5, 8], [48, 2, 4], [52, 4, 12],
+        [64, 4, 3], [67, 5, 3], [70, 7, 2], [72, 9, 8], [80, 8, 4], [84, 7, 2], [86, 6, 2], [88, 4, 8], [96, 5, 4], [100, 3, 2], [102, 1, 2], [104, 3, 8], [112, 5, 4], [116, 4, 2], [118, 3, 2], [120, 3, 8]],
+      themeB: [[0, 7, 4], [4, 5, 4], [8, 7, 8], [16, 7, 6], [22, 5, 2], [24, 3, 8], [32, 4, 4], [36, 2, 2], [38, 4, 2], [40, 7, 8], [48, 6, 4], [52, 4, 12],
+        [64, 7, 3], [67, 8, 3], [70, 7, 2], [72, 5, 8], [80, 3, 4], [84, 5, 4], [88, 7, 8], [96, 8, 4], [100, 5, 2], [102, 3, 2], [104, 1, 8], [112, 2, 4], [116, 6, 4], [120, 4, 8]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 240), d, 'warm', 0.05 + 0.008 * Math.min(5, h.L));
+        if (h.L >= 4) this.chordPad(t, this.pvoice(h.ch, h.T, 380), d, 'oo', 0.026 + 0.008 * (h.L - 4));
+        this.marimba(t, this.pvoice([h.ch[0]], h.T, 90)[0], 0.8, 2.4);
+        if (h.L >= 2) this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 62)[0], 0.3 + 0.05 * h.L, STEP * 10);
+      },
+      bed(t, h) {
+        const r = this.rnd;
+        if (h.m % 12 === 0) this.noiseHit(t, BEAT * 5, 'lowpass', 260, 900, 0.04 + 0.01 * h.L, 0.9, BEAT * 2.5);     // the caps breathe
+        const W = [0, 2, 1, 3, 2, 1], k = h.m % 6;                                                                  // the kalimba, in threes
+        if (h.m % 2 === 0 || h.L >= 2) { const i = W[k], rr = i === 3 ? h.ch[0] * 2 : h.ch[i % h.ch.length]; this.kalimba(t, fold(h.T * rr * 8, 260, 620), (k === 0 ? 0.85 : 0.5) * (0.6 + 0.05 * h.L)); }
+        if (h.s16 === 5 && h.L >= 1) this.marimba(t, this.pvoice([h.ch[2]], h.T, 130)[0], 0.5, 1.4);
+        if (h.s8 === 0) this.thump(t, 40, 0.16 + 0.03 * h.L, 0.3);                                                // muffled knocks
+        if (h.m % 5 === 3) this.tick(t, 0.55, 340 + 140 * (Math.floor(h.p / 8) % 3));
+        if (r() < 0.08) this.tick(t + r() * STEP, 0.3, 2600 + 1600 * r());                                          // spores popping
+        if (h.L >= 4 && (h.s8 === 3 || h.s8 === 6)) this.thump(t, 66, 0.12 + 0.03 * h.L, 0.25);                    // a soft frame drum
+        if (h.L >= 5) this.noiseHit(t + STEP / 2, 0.07, 'highpass', 5200, 4200, 0.018, 0.8, 0.003);                  // a shaker
+      },
+      lead(t, f, dur, h) {
+        if (h.L <= 1) { if (dur >= STEP * 4 || h.L === 1) this.kalimba(t, fold(f * 2, 300, 900), 0.6); return; }
+        this.deepLead(t, f, 0.034 + 0.006 * h.L, dur, false);
+        if (h.L >= 3 && dur >= STEP * 3) this.kalimba(t, f * 2, 0.45);
+        if (h.L >= 5) this.sung(t, f / 2, 0.02, dur, 'oo');
+        if (h.L >= 6) this.deepLead(t, f * 2, 0.015, dur, true, true);
+      },
+      far(t, f) { this.marimba(t, fold(f, 300, 800), 0.5, 2); },
+      call(t, f, dur, h, d, low) { if (low) this.marimba(t, fold(f, 60, 130), 0.9, 4); else this.kalimba(t, f * 2, 0.7); },
+    },
+    /* III  THE GLASS GARDEN. Wonder: a glass harmonica, a music box in sixteenths, chimes at every chord, almost nothing low */
+    glass: {
+      scale: SC.LYD, oct: 3, callLow: 6,
+      chords: { I: [0, 2, 4, 6], II: [1, 3, 5], iii: [2, 4, 6], V: [4, 6, 8], vii: [6, 8, 10] },
+      progA: ['I', 'II', 'I', 'II', 'iii', 'vii', 'II', 'V'],
+      progB: ['iii', 'II', 'I', 'V', 'vii', 'iii', 'II', 'II'],
+      themeA: [[0, 4, 4], [4, 6, 4], [8, 7, 8], [16, 3, 6], [22, 2, 2], [24, 1, 8], [32, 2, 4], [36, 4, 4], [40, 6, 8], [48, 5, 4], [52, 3, 12],
+        [64, 6, 4], [68, 4, 4], [72, 2, 8], [80, 8, 4], [84, 6, 2], [86, 8, 2], [88, 10, 8], [96, 8, 4], [100, 5, 2], [102, 3, 2], [104, 5, 8], [112, 4, 4], [116, 6, 2], [118, 8, 2], [120, 6, 8]],
+      themeB: [[0, 9, 4], [4, 6, 2], [6, 4, 2], [8, 6, 8], [16, 5, 4], [20, 3, 2], [22, 1, 2], [24, 3, 8], [32, 4, 2], [34, 6, 2], [36, 7, 4], [40, 9, 8], [48, 8, 4], [52, 6, 12],
+        [64, 10, 4], [68, 8, 4], [72, 6, 8], [80, 9, 4], [84, 6, 4], [88, 4, 8], [96, 5, 4], [100, 8, 4], [104, 10, 8], [112, 8, 4], [116, 5, 4], [120, 3, 8]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 760), d, 'glass', 0.035 + 0.006 * Math.min(5, h.L));
+        if (h.L >= 4) this.chordPad(t, this.pvoice(h.ch, h.T, 560), d, 'oo', 0.02 + 0.006 * (h.L - 4));
+        this.marimba(t, this.pvoice([h.ch[0]], h.T, 60)[0], 0.4, 3.0);                                            // a faint floor
+        if (h.L >= 3) this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 75)[0], 0.2 + 0.04 * h.L, STEP * 12);
+        h.ch.forEach((rr, j) => this.glassPing(t + j * 0.07, fold(h.T * rr * 32, 1400, 3400), 0.55, 3.2));        // chimes: the chord, high
+      },
+      bed(t, h) {
+        const r = this.rnd, hs = STEP / 2, AR = h.ch.slice(0, 3).concat(h.ch.slice(0, 3).map(x => x * 2)), PAT = [0, 1, 2, 3, 4, 3, 2];
+        for (let k = 0; k < 2; k++) {                                                                              // the music box: up and down the chord, seven against the bar
+          const i = h.m * 2 + k; if (k === 1 && h.L < 2 && i % 4 !== 1) continue;
+          this.glassPing(t + k * hs, fold(h.T * AR[PAT[i % 7]] * 16, 700, 2300), (i % 7 === 0 ? 0.8 : 0.45) * (0.55 + 0.05 * h.L), 1.3);
+        }
+        if (h.m % 5 === 0) this.tick(t, 0.4, 6200);                                                                // tinks on five
+        if (h.L >= 3 && h.m % 5 === 2) this.tick(t + hs, 0.35, 4800);
+        if (r() < 0.05) this.glassPing(t + r() * STEP, fold(h.T * h.ch[Math.floor(r() * h.ch.length)] * 64, 2600, 4800), 0.3, 0.8);
+        if (h.L >= 5 && h.s8 === 0) this.thump(t, 54, 0.14, 0.4);
+        if (h.L >= 5 && h.s8 === 4) this.noiseHit(t, 0.5, 'highpass', 5000, 9000, 0.02, 0.6, 0.2);                 // a shimmer rising
+      },
+      lead(t, f, dur, h) {
+        if (h.L <= 1) { if (dur >= STEP * 4 || h.L === 1) this.glassPing(t, f * 2, 0.7, 2.6); return; }
+        this.glassLead(t, f, 0.03 + 0.005 * h.L, dur);
+        if (h.L >= 3) this.glassPing(t, f * 2, 0.5, 1.6);
+        if (h.L >= 5) this.sung(t, f, 0.015, dur, 'oo');
+        if (h.L >= 6) this.glassLead(t, f * 2, 0.012, dur);
+      },
+      far(t, f, dur) { this.glassPing(t, f, 0.45, 2.4); },
+      call(t, f, dur, h, d, low) { if (low) this.marimba(t, fold(f, 60, 140), 0.6, 4); else this.glassLead(t, f, 0.035, dur); },
+    },
+    /* IV  THE FOUNDRY. The machine keeps time: an ostinato of iron, strings driving, horns, the great drums */
+    foundry: {
+      scale: SC.AEO, raised: 15 / 8, oct: 2, callLow: 6,
+      chords: { i: [0, 2, 4], III: [2, 4, 6], iv: [3, 5, 7], V: [4, 6.5, 8], V7: [4, 6.5, 8, 10], VI: [5, 7, 9], VII: [6, 8, 10] },
+      progA: ['i', 'VI', 'III', 'VII', 'i', 'VI', 'iv', 'V'],
+      progB: ['VI', 'VII', 'i', 'i', 'VI', 'VII', 'V', 'V7'],
+      themeA: [[0, 0, 3], [3, 0, 1], [4, 4, 4], [8, 7, 8], [16, 7, 4], [20, 5, 2], [22, 7, 2], [24, 9, 8], [32, 9, 6], [38, 6, 2], [40, 4, 8], [48, 6, 4], [52, 8, 12],
+        [64, 7, 3], [67, 7, 1], [68, 9, 4], [72, 11, 8], [80, 12, 6], [86, 11, 2], [88, 9, 8], [96, 10, 4], [100, 9, 2], [102, 8, 2], [104, 7, 8], [112, 8, 4], [116, 6.5, 4], [120, 4, 8]],
+      themeB: [[0, 5, 6], [6, 4, 2], [8, 2, 8], [16, 1, 4], [20, 3, 4], [24, 6, 8], [32, 7, 6], [38, 6, 2], [40, 4, 8], [48, 2, 4], [52, 0, 12],
+        [64, 5, 4], [68, 7, 4], [72, 9, 8], [80, 8, 6], [86, 7, 2], [88, 6, 8], [96, 6.5, 4], [100, 8, 4], [104, 11, 8], [112, 10, 4], [116, 8, 4], [120, 6.5, 8]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 170), d, 'grind', 0.04 + 0.006 * Math.min(5, h.L));
+        if (h.L >= 3) this.chordPad(t, this.pvoice(h.ch, h.T, 330), d, 'strings', 0.022 + 0.006 * (h.L - 3));
+        if (h.L >= 5) this.chordPad(t, this.pvoice(h.ch, h.T, 440), d, 'choir', 0.028);
+        if (h.L >= 1) this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 52)[0], 0.55 + 0.06 * h.L, STEP * 3);
+      },
+      bed(t, h) {
+        const r = this.rnd, s8 = h.s8, root = this.pvoice([h.ch[0]], h.T, 75)[0], third = this.pvoice([h.ch[1]], h.T, 90)[0], fifth = this.pvoice([h.ch[2]], h.T, 105)[0];
+        const MP = [0, 0, 2, 0, 0, 2, 1, 2];                                                                       // the machine: the chord's root, its fifth
+        if (h.L >= 1 || h.m % 2 === 0) this.machine(t, [root, third, fifth][MP[s8]], (s8 === 0 ? 1 : 0.6) * (0.5 + 0.06 * h.L), STEP * 0.7);
+        if (h.m % 2 === 0) this.thump(t, 58, 0.22 + 0.05 * h.L, 0.22);                                            // the hammer on every beat
+        if (s8 === 0) this.anvil(t, this.pvoice([h.ch[0]], h.T, 720)[0], 0.8);                                    // the anvil rings the chord
+        if (s8 === 4) this.anvil(t, this.pvoice([h.ch[2]], h.T, 720)[0], 0.5);
+        if (s8 === 2 || s8 === 6) this.noiseHit(t, 0.14, 'bandpass', 1700, 900, 0.08 + 0.02 * h.L, 2.2, 0.003);
+        if (s8 === 5) this.noiseHit(t, 0.55, 'highpass', 2600, 5200, 0.04 + 0.01 * h.L, 0.7, 0.05);            // steam
+        if (h.L >= 2) this.tick(t + STEP / 2, 0.3 + 0.25 * r(), 3000 + 1200 * r());                                // chains
+        if (h.L >= 3) {                                                                                            // the strings, driving in sixteenths
+          const F = h.ch[2] / h.ch[0], Th = h.ch[1] / h.ch[0], OST = [1, 1, 2, 1, 1, 1, F, 1, 1, 1, 2, 1, Th, 1, F, Th];
+          for (let k = 0; k < 2; k++) { const j = (s8 * 2 + k) % 16; this.spic(t + k * STEP / 2, root * 2 * OST[j], (0.042 + 0.008 * (h.L - 3)) * (j % 4 === 0 ? 1 : 0.7)); }
+        }
+        if (h.L >= 4) { if (s8 === 0) this.taiko(t, 0.5 + 0.05 * h.L, 32); if (s8 === 3) this.taiko(t + STEP / 2, 0.32, 36); if (s8 === 4) this.taiko(t, 0.42, 34); }
+        if (h.L >= 5) { if (s8 === 2 || s8 === 6) this.snare(t, 0.65); if (h.p === 0 && (h.form === 'A' || h.form === 'B')) this.crash(t, 0.7); if (h.s16 === 12) this.riser(t, STEP * 4, 0.03); }
+        if (h.m % 64 === 56) this.reed(t, this.pvoice([h.ch[2]], h.T, 400)[0], 0.035, BEAT * 2.5, 6.5);            // the shift whistle
+      },
+      lead(t, f, dur, h) {
+        if (h.L <= 1) { if (dur >= STEP * 4 || h.L === 1) this.anvil(t, fold(f * 4, 500, 1100), 0.5); return; }
+        if (h.form === 'B') { this.deepLead(t, f * 2, 0.03 + 0.005 * h.L, dur, true); if (h.L >= 4) this.deepLead(t, f, 0.02, dur, true, true); }
+        else this.brass(t, h.L >= 4 ? [f, f / 2] : [f], 0.042 + 0.007 * h.L, dur);
+        if (h.L >= 6) this.sung(t, f, 0.02, dur, 'ah');
+      },
+      far(t, f) { this.anvil(t, fold(f * 2, 500, 1100), 0.4); },
+      call(t, f, dur, h, d, low) { this.brass(t, [low ? fold(f, 60, 120) : f], 0.05, dur); },
+    },
+    /* V  EMBER DEEP. Slow and heavy under a buried sun: a mournful reed, a low choir, the great drums, a hand drum */
+    ember: {
+      scale: SC.HIJ, oct: 3, callLow: 6,
+      chords: { I: [0, 2, 4], bII: [1, 3, 5], iv: [3, 5, 7], bIII: { r: [19 / 16, 3 / 2, 57 / 32] } },
+      progA: ['I', 'bII', 'I', 'bII', 'iv', 'bIII', 'bII', 'I'],
+      progB: ['iv', 'iv', 'bIII', 'bIII', 'bII', 'bII', 'I', 'I'],
+      themeA: [[0, 4, 6], [6, 5, 2], [8, 4, 8], [16, 5, 6], [22, 3, 2], [24, 1, 8], [32, 2, 4], [36, 4, 2], [38, 2, 2], [40, 0, 8], [48, 1, 4], [52, 3, 12],
+        [64, 3, 4], [68, 5, 4], [72, 7, 8], [80, 6, 6], [86, 5, 2], [88, 4, 8], [96, 5, 4], [100, 3, 4], [104, 1, 8], [112, 3, 4], [116, 2, 4], [120, 0, 8]],
+      themeB: [[0, 7, 8], [8, 5, 8], [16, 3, 8], [24, 5, 8], [32, 4, 8], [40, 6, 8], [48, 4, 16], [64, 3, 8], [72, 5, 8], [80, 1, 16], [96, 2, 8], [104, 4, 8], [112, 0, 16]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 120), d, 'ember', 0.07 + 0.008 * Math.min(5, h.L));
+        if (h.L >= 3) this.chordPad(t, this.pvoice(h.ch, h.T, 230), d, 'oo', 0.03 + 0.007 * (h.L - 3));
+        if (h.L >= 5) this.chordPad(t, this.pvoice(h.ch, h.T, 330), d, 'choir', 0.03);
+        this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 44)[0], 0.8, BEAT * 3);
+        if (h.L >= 2) this.bell(t, this.pvoice([h.ch[0]], h.T, 160)[0], 0.6, 6);                                   // a low gong at every chord
+      },
+      bed(t, h) {
+        const r = this.rnd, s8 = h.s8;
+        if (s8 === 0) this.taiko(t, 0.5 + 0.05 * h.L, 34);                                                       // the great drum on one, its answer late
+        if (s8 === 5 && h.L >= 1) this.taiko(t, 0.25 + 0.04 * h.L, 42);
+        if (h.L >= 4 && h.p % 32 === 30) { this.taiko(t, 0.3, 46); this.taiko(t + STEP / 2, 0.36, 42); }
+        if (h.s16 === 0) this.noiseHit(t, BEAT * 4, 'lowpass', 140, 50, 0.08 + 0.01 * h.L, 0.7, 0.4);           // the ground groans
+        if (h.L >= 3) { if (s8 === 0 || s8 === 4) this.thump(t, 90, 0.13, 0.18); if (s8 === 2 || s8 === 3 || s8 === 6) this.tick(t, 0.55, 2400); }   // a hand drum: dum, tek tek, dum, tek
+        const c = r() < 0.35 ? 1 + Math.floor(r() * 3) : 0;                                                      // embers crackling
+        for (let i = 0; i < c; i++) this.noiseHit(t + r() * STEP, 0.02 + 0.03 * r(), 'highpass', 2500 + 3000 * r(), 1500, 0.02 + 0.025 * r(), 0.7, 0.001);
+      },
+      lead(t, f, dur, h) {
+        if (h.L === 0) { if (dur >= STEP * 4) this.bell(t, f, 0.32, Math.max(3, dur)); return; }
+        if (h.form === 'B') { this.sung(t, f / 2, 0.034 + 0.005 * h.L, dur, 'oo'); if (h.L >= 4) this.reed(t + STEP * 2, f, 0.032, Math.max(STEP * 2, dur - STEP * 2), 4.2); }
+        else { this.reed(t, f, 0.05 + 0.006 * h.L, dur, 4.2); if (h.L >= 4) this.sung(t, f / 2, 0.02, dur, 'oo'); }
+        if (h.L >= 6) this.reed(t, f * 2, 0.018, dur, 4.6);
+      },
+      far(t, f, dur) { this.bell(t, f / 2, 0.3, Math.max(3, dur)); },
+      call(t, f, dur, h, d, low) { if (low) this.sung(t, f, 0.04, dur, 'oo'); else this.reed(t, f, 0.055, dur, 4.2); },
+    },
+    /* VI  THE HEART. The pulse is the rhythm: a choir, a single voice, a harp, strings trembling; and at the last, major */
+    heart: {
+      scale: SC.AEO, raised: 15 / 8, oct: 3, callLow: 6,
+      chords: { i: [0, 2, 4], III: [2, 4, 6], iv: [3, 5, 7], V: [4, 6.5, 8], VI: [5, 7, 9], VII: [6, 8, 10], Ip: { r: [1, 5 / 4, 3 / 2] } },
+      progA: ['i', 'i', 'VI', 'VI', 'iv', 'iv', 'V', 'V'],
+      progB: ['III', 'VII', 'i', 'VI', 'iv', 'VI', 'V', 'V'],
+      progC: ['VI', 'VI', 'iv', 'iv', 'V', 'V', 'Ip', 'Ip'],
+      themeA: [[0, 4, 8], [8, 2, 4], [12, 4, 4], [16, 7, 6], [22, 6, 2], [24, 4, 8], [32, 5, 8], [40, 7, 8], [48, 9, 8], [56, 7, 8],
+        [64, 7, 8], [72, 5, 8], [80, 3, 8], [88, 5, 8], [96, 4, 8], [104, 6.5, 8], [112, 8, 8], [120, 6.5, 8]],
+      themeB: [[0, 6, 4], [4, 4, 4], [8, 2, 8], [16, 3, 4], [20, 6, 4], [24, 8, 8], [32, 9, 8], [40, 7, 4], [44, 4, 4], [48, 5, 8], [56, 7, 8],
+        [64, 10, 8], [72, 9, 4], [76, 7, 4], [80, 9, 8], [88, 7, 8], [96, 8, 8], [104, 6.5, 4], [108, 4, 4], [112, 6.5, 8], [120, 8, 8]],
+      themeC: [[0, 7, 8], [8, 9, 8], [16, 7, 8], [24, 5, 8], [32, 5, 8], [40, 3, 8], [48, 7, 16], [64, 6.5, 8], [72, 8, 8], [80, 4, 8], [88, 6.5, 8], [96, 7, 32]],
+      pad(t, h) {
+        const d = STEP * 16;
+        this.chordPad(t, this.pvoice(h.ch, h.T, 300), d, 'choir', 0.03 + 0.006 * Math.min(5, h.L));
+        if (h.L >= 3) this.chordPad(t, this.pvoice(h.ch, h.T, 220), d, h.L >= 5 ? 'tremolo' : 'strings', 0.022 + 0.006 * (h.L - 3));
+        if (h.L >= 6) this.chordPad(t, this.pvoice(h.ch, h.T, 560), d, 'oo', 0.03);
+      },
+      bed(t, h) {
+        const r = this.rnd, m = h.m, beat = m % 4 === 0, stumble = m % 64 === 60 && !h.fin;                      // the pulse; once in a long while it comes early
+        if (beat || stumble) { const v = 0.34 + 0.3 * h.e, tt = stumble ? t - STEP * 0.3 : t; this.thump(tt, 46, v, 0.5); this.thump(tt + 0.19, 46, v * 0.6, 0.34); this.noiseHit(tt + 0.08, BEAT * 1.4, 'lowpass', 180, 520, 0.04 + 0.04 * h.e, 1.2, BEAT * 0.5); }
+        if (h.s8 === 1) this.pluckBass(t, this.pvoice([h.ch[0]], h.T, 60)[0], 0.6, STEP * 3);                     // the root after the beat
+        if (h.s8 === 5 && h.L >= 2) this.pluckBass(t, this.pvoice([h.ch[2]], h.T, 80)[0], 0.4, STEP * 2);
+        if (h.L >= 2 && m % 2 === 0) { const AR = [0, 1, 2, 3, 2, 1, 0, 1], i = AR[(m / 2) % 8], rr = i === 3 ? h.ch[0] * 2 : h.ch[i]; this.harp(t, fold(h.T * rr * 4, 220, 520), 0.5 + 0.05 * h.L, 2); }   // a harp, up and down
+        if (h.L >= 3 && m % 32 === 16 && !h.fin) { this.bell(t, fold(F0 * 19 * this.fl.tr, 900, 1900), 0.18, 3); this.bell(t + 0.05, fold(F0 * 21 * this.fl.tr, 900, 1900), 0.18, 3); }   // nerves
+        if (h.L >= 5 && m % 2 === 1 && r() < 0.5) this.tick(t, 0.3, 1400 + 600 * r());
+        if (h.L >= 5 && h.s16 === 0) this.taiko(t, 0.4, 34);
+      },
+      lead(t, f, dur, h) {
+        if (h.L <= 1) { if (dur >= STEP * 4) this.bell(t, f, 0.3, Math.max(3, dur)); return; }
+        this.sung(t, f, 0.03 + 0.005 * h.L, dur, 'ah');
+        if (h.L >= 4) this.sung(t, f / 2, 0.02, dur, 'oo');
+        if (h.L >= 6) this.deepLead(t, f, 0.024, dur, true);
+      },
+      far(t, f, dur) { this.bell(t, f, 0.25, Math.max(3, dur)); },
+      call(t, f, dur, h, d, low) { this.sung(t, f, 0.034, dur, low ? 'oo' : 'ah'); },
+    },
+  };
+
+
   class Engine {
     constructor(ctx, out, opts) {
       opts = opts || {};
@@ -6634,7 +6949,7 @@ window.DWELLER_DEEP = [
       this.echoFb = c.createGain(); this.echoFb.gain.value = 0.42; this.echoLP = c.createBiquadFilter(); this.echoLP.type = 'lowpass'; this.echoLP.frequency.value = 1800;
       this.echo.connect(this.echoLP); this.echoLP.connect(this.echoFb); this.echoFb.connect(this.echo); this.echoLP.connect(this.revSend);
       this.echoOut = c.createGain(); this.echoOut.gain.value = 0.5; this.echoLP.connect(this.echoOut); this.echoOut.connect(this.musicBus);
-      this.energy = 0.2; this.fear = 0; this.rootIdx = 0; this.seedBase = 1; this.fl = FLAVOURS[0];
+      this.energy = 0.2; this.fear = 0; this.rootIdx = 0; this.seedBase = 1; this.fl = TOWNFL;
       this.buildDrone(); this.buildWind(); this.buildFear(); this.buildSpace();
       this.pad = null; this.padTime = -99;
     }
@@ -6773,6 +7088,7 @@ window.DWELLER_DEEP = [
       this.fearGain.gain.setTargetAtTime(0.14 * f * f * d, t, 0.25);
       if (this.pad) { this.pad.out.gain.setTargetAtTime((0.20 + 0.30 * e) * d, t, tc); this.pad.lp.frequency.setTargetAtTime(520 + 1100 * e, t, 1.5); }
       this.droneLP.frequency.setTargetAtTime(210 + 340 * e + 200 * f, t, 1.2);
+      if (this.pedal) this.pedal.g.gain.setTargetAtTime(this.pedal.v * (0.55 + 0.45 * e) * d, t, tc);
     }
 
     env(g, t, a, peak, d) {
@@ -6889,6 +7205,7 @@ window.DWELLER_DEEP = [
 
     /* one musical step (half a beat). n is the global step number. Each level has its own score. */
     step(t, n, p) {
+      if (this.fl.piece) return this.score_piece(t, n, p.energy === undefined ? this.energy : p.energy);
       const sc = this.fl.score;
       if (sc && sc !== 'descent') return this['score_' + sc](t, n, p.energy === undefined ? this.energy : p.energy);
       const e = p.energy === undefined ? this.energy : p.energy;
@@ -6937,111 +7254,6 @@ window.DWELLER_DEEP = [
     }
 
     pick(i) { return PALETTE[((i % 6) + 6) % 6] * PALETTE[this.rootIdx] * this.fl.tr; }
-
-    /* II THE MYCELIUM: in threes against the bar, soft and damp */
-    score_mycelium(t, n, e) {
-      const r = this.rnd, bar = Math.floor(n / 8);
-      // the caps breathe: a slow swell every six beats
-      if (n % 12 === 0) this.noiseHit(t, BEAT * 5, 'lowpass', 260, 900, 0.05 + 0.05 * e, 0.9, BEAT * 2.5);
-      // kalimba walking in threes (6 steps) over the 8-step bar
-      const walk = [0, 4, 2, 5, 4, 2], k = n % 6;
-      if (n % 2 === 0 || e > 0.35) {
-        const up = (Math.floor(n / 24) % 2) ? 1 : 0;
-        this.kalimba(t, fold(F0 * this.pick(walk[k] + up) * 8, 260, 620), (k === 0 ? 0.9 : 0.55) * (0.6 + 0.4 * e));
-      }
-      // soft low marimba: the root, and the fifth on the sixth step
-      if (n % 8 === 0) this.marimba(t, fold(F0 * this.pick(0) * 2, 70, 140), 0.8, 2.2);
-      if (n % 8 === 5 && e > 0.25) this.marimba(t, fold(F0 * this.pick(4) * 2, 90, 180), 0.5, 1.4);
-      // muffled knocks instead of a heartbeat
-      if (n % 8 === 0) this.thump(t, 40, 0.18 + 0.2 * e, 0.3);
-      if (n % 5 === 3) this.tick(t, 0.6, 340 + 140 * (bar % 3));
-      // spores popping
-      if (r() < 0.10) this.tick(t + r() * STEP, 0.35, 2600 + 1600 * r());
-      if (e > 0.6 && n % 2 === 1) this.noiseHit(t, 0.09, 'highpass', 5200, 4000, 0.025 * e, 0.8, 0.004);
-    }
-
-    /* III THE GLASS GARDEN: a high music box in sixteenths, chimes, almost nothing low */
-    score_glass(t, n, e) {
-      const r = this.rnd;
-      const seq = [0, 2, 4, 5, 4, 2, 1], hs = STEP / 2;
-      for (let h = 0; h < 2; h++) {
-        const i = n * 2 + h, k = i % 7;
-        if (h === 1 && e < 0.3 && i % 4 !== 1) continue;
-        const oct = Math.floor(i / 14) % 3;
-        this.glassPing(t + h * hs, fold(F0 * this.pick(seq[k]) * 16 * Math.pow(2, oct === 2 ? 1 : 0), 700, 2300), (k === 0 ? 0.9 : 0.5) * (0.55 + 0.45 * e), 1.3);
-      }
-      // a strummed chord of glass every two bars
-      if (n % 16 === 0) [0, 4, 5, 2].forEach((d, j) => this.glassPing(t + j * 0.07, fold(F0 * this.pick(d) * 32, 1400, 3400), 0.7, 3.4));
-      // a faint sub, so the garden has a floor
-      if (n % 16 === 0) this.marimba(t, fold(F0 * this.pick(0), 40, 80), 0.45, 3.0);
-      // tinks on five, against the seven of the box
-      if (n % 5 === 0) this.tick(t, 0.45, 6200);
-      if (e > 0.55 && n % 5 === 2) this.tick(t + hs, 0.4, 4800);
-      if (r() < 0.06) this.glassPing(t + r() * STEP, fold(F0 * this.pick(Math.floor(r() * 6)) * 64, 2600, 4800), 0.3, 0.8);
-    }
-
-    /* IV THE FOUNDRY: the machine keeps time */
-    score_foundry(t, n, e) {
-      const r = this.rnd, s8 = n % 8;
-      // the machine ostinato in eighths (quarters while it is quiet)
-      const pat = [0, 0, 4, 0, 0, 4, 5, 4];
-      if (e > 0.3 || n % 2 === 0) this.machine(t, fold(F0 * this.pick(pat[s8]) * 2, 50, 110), (s8 === 0 ? 1 : 0.65) * (0.55 + 0.45 * e), STEP * 0.7);
-      // the hammer on every beat, the anvil on one and three
-      if (n % 2 === 0) this.thump(t, 58, 0.28 + 0.35 * e, 0.22);
-      if (s8 === 0) this.anvil(t, fold(F0 * this.pick(0) * 13, 500, 1000), 0.9);
-      if (s8 === 4) this.anvil(t, fold(F0 * this.pick(4) * 13, 500, 1000), 0.55);
-      // a clank on two and four
-      if (s8 === 2 || s8 === 6) this.noiseHit(t, 0.14, 'bandpass', 1700, 900, 0.10 + 0.08 * e, 2.2, 0.003);
-      // steam on the off-beat of three
-      if (s8 === 5) this.noiseHit(t, 0.55, 'highpass', 2600, 5200, 0.05 + 0.04 * e, 0.7, 0.05);
-      // chains in sixteenths when the shift is busy
-      if (e > 0.5) this.tick(t + STEP / 2, 0.35 + 0.3 * r(), 3000 + 1200 * r());
-      // the shift whistle, now and then
-      if (n % 32 === 24) this.reed(t, fold(F0 * this.pick(5) * 8, 260, 520), 0.05 + 0.03 * e, BEAT * 2.5, 6.5);
-    }
-
-    /* V EMBER DEEP: slow and heavy under a buried sun */
-    score_ember(t, n, e) {
-      const r = this.rnd;
-      // the great drum on one, an answer late in the bar
-      if (n % 8 === 0) this.taiko(t, 0.55 + 0.3 * e, 34);
-      if (n % 8 === 5 && e > 0.3) this.taiko(t, 0.28 + 0.2 * e, 42);
-      if (n % 32 === 30 && e > 0.5) { this.taiko(t, 0.3, 46); this.taiko(t + STEP / 2, 0.36, 42); }
-      // the ground groans
-      if (n % 16 === 0) this.noiseHit(t, BEAT * 4, 'lowpass', 140, 50, 0.09 + 0.06 * e, 0.7, 0.4);
-      if (n % 16 === 0) this.pluckBass(t, fold(F0 * this.pick(0), 30, 62), 0.9, BEAT * 3);
-      // a mournful reed, long notes falling through the low palette
-      const phrase = [[0, 0, 4], [2, 3, 1], [4, 2, 0], [3, 1, 0]][Math.floor(n / 32) % 4];
-      if (n % 32 === 0) this.reed(t, fold(F0 * this.pick(phrase[0]) * 4, 150, 300), 0.07 + 0.03 * e, BEAT * 5, 4.2);
-      if (n % 32 === 12) this.reed(t, fold(F0 * this.pick(phrase[1]) * 4, 150, 300), 0.06 + 0.03 * e, BEAT * 3, 4.2);
-      if (n % 32 === 20) this.reed(t, fold(F0 * this.pick(phrase[2]) * 4, 130, 260), 0.06 + 0.03 * e, BEAT * 5, 4.2);
-      // embers crackling
-      const c = r() < 0.4 ? 1 + Math.floor(r() * 3) : 0;
-      for (let i = 0; i < c; i++) this.noiseHit(t + r() * STEP, 0.02 + 0.03 * r(), 'highpass', 2500 + 3000 * r(), 1500, 0.02 + 0.03 * r(), 0.7, 0.001);
-      // a low gong, rarely
-      if (n % 64 === 48) this.bell(t, fold(F0 * this.pick(4) * 4, 110, 220), 0.9, 6);
-    }
-
-    /* VI THE HEART: the pulse is the rhythm, and it stumbles */
-    score_heart(t, n, e) {
-      const r = this.rnd, beat = n % 4 === 0;
-      const stumble = n % 64 === 60;                // arrhythmia: once in a long while the beat comes early
-      if (beat || stumble) {
-        const v = 0.42 + 0.4 * e, tt = stumble ? t - STEP * 0.3 : t;
-        this.thump(tt, 46, v, 0.5); this.thump(tt + 0.19, 46, v * 0.6, 0.34);
-        // blood rushing after the beat
-        this.noiseHit(tt + 0.08, BEAT * 1.4, 'lowpass', 180, 520, 0.05 + 0.05 * e, 1.2, BEAT * 0.5);
-      }
-      // a deep pulse of the root after the beat
-      if (n % 8 === 1) this.pluckBass(t, fold(F0 * this.pick(0) * 2, 44, 96), 0.7, STEP * 3);
-      if (n % 8 === 5 && e > 0.4) this.pluckBass(t, fold(F0 * this.pick(4) * 2, 60, 130), 0.5, STEP * 2);
-      // a hummed line, sparse, in sevens
-      const hum = [5, 4, 0, 1, 4, 0, 2], k = n % 14;
-      if (k % 2 === 0 && [0, 4, 6].includes(k / 2) && r() < 0.6 + 0.3 * e) this.reed(t, fold(F0 * this.pick(hum[k / 2]) * 8, 300, 640), 0.035 + 0.02 * e, BEAT * 2.2, 5.5);
-      // nerves: the 19th and 21st harmonics, together, very quietly
-      if (n % 32 === 16) { this.bell(t, fold(F0 * 19 * this.fl.tr, 900, 1900), 0.25, 3); this.bell(t + 0.05, fold(F0 * 21 * this.fl.tr, 900, 1900), 0.25, 3); }
-      if (e > 0.6 && n % 2 === 1) this.tick(t, 0.35, 1400 + 600 * r());
-    }
 
     /* VII THE CORE: the battle with the Guardian. In the minor (the Deep's scale: 1, 9/8, 19/16, 171/128, 3/2, 51/32,
        57/32, and 15/8 for the raised seventh), eight bars round, a chord every two:
@@ -7339,6 +7551,129 @@ window.DWELLER_DEEP = [
       if (k >= 0.97 && s8 === 0) [0, 2, 4, 7].forEach((d, j) => this.bell(t + j * 0.06, this.dn(d, 3), 0.42, 5));
     }
 
+
+    /* ================================================================ THE SIX WORLDS' SCORES
+       Each of the six levels is one piece. Its own scale (every pitch still 48 Hz x X / 2^N), two progressions of
+       eight chords (two bars each), and a theme over each, sixteen bars long. A period is sixteen bars (43 s), and the
+       piece goes round A B X A B Y: the two themes, then two interludes without them (in the second, the call from the
+       opening, in the world's own voice). The deeper into the level you are, the more of it there is (L, 0..5): the
+       world's own sound and its chords from the first step; then the bass; the theme far off; the theme sung; doubled,
+       with the choir and the swells into every chord; the drums. In the last chamber (L 6) the music swells into a bar
+       of its own and the theme arrives there whole, everything playing; the Heart's ends on a major chord. */
+    pdeg(P, d) { const o = Math.floor(d / 7), k = d - o * 7; return (k === 6.5 ? P.raised : P.scale[Math.round(k)]) * Math.pow(2, o); }
+    pchord(P, name) { const c = P.chords[name]; return c.r ? c.r : c.map(d => this.pdeg(P, d)); }
+    // a chord's tones placed near a centre (each in its nearest octave: the voices move as little as they can)
+    pvoice(rs, T, centre) { return rs.map(r => { let f = T * r; while (f < centre / 1.42) f *= 2; while (f > centre * 1.42) f /= 2; return f; }).sort((a, b) => a - b); }
+    pfold(f, lo, hi) { return fold(f, lo, hi); }
+
+    flute(t, f, vel, dur) {          // a flute of ice: a pure tone and a little of its octave, the breath in it, a late vibrato
+      const c = this.ctx, g = c.createGain(), att = Math.min(0.16, dur * 0.3), end = t + dur + 0.45;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + att); g.gain.setValueAtTime(vel, t + Math.max(att + 0.01, dur * 0.72)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.4);
+      const v = c.createOscillator(); v.frequency.value = 5.1; const vg = c.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.005, t + Math.max(0.5, dur * 0.6)); v.connect(vg);
+      for (const [type, mul, a] of [['sine', 1, 1], ['triangle', 1, 0.22], ['sine', 2, 0.1]]) {
+        const o = c.createOscillator(); o.type = type; o.frequency.value = f * mul; vg.connect(o.frequency);
+        const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(end);
+      }
+      const s = c.createBufferSource(); s.buffer = this.noise; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(8000, f * 2.2); bp.Q.value = 3;
+      const ng = c.createGain(); ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(vel * 0.55, t + 0.04); ng.gain.exponentialRampToValueAtTime(vel * 0.1, t + 0.3); ng.gain.setValueAtTime(vel * 0.1, t + Math.max(0.31, dur * 0.72)); ng.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.3);
+      s.connect(bp); bp.connect(ng); ng.connect(g);
+      v.start(t); v.stop(end); s.start(t, this.rnd() * 2); s.stop(end);
+      g.connect(this.musicBus);
+      const r = c.createGain(); r.gain.value = 0.85; g.connect(r); r.connect(this.revSend);
+      const e = c.createGain(); e.gain.value = 0.4; g.connect(e); e.connect(this.echo);
+    }
+    glassLead(t, f, vel, dur) {      // a glass harmonica: two pure tones a breath apart, a slow swell, shimmering
+      const c = this.ctx, g = c.createGain(), att = Math.min(0.3, dur * 0.35), end = t + dur + 0.9;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + att); g.gain.setValueAtTime(vel, t + Math.max(att + 0.01, dur * 0.7)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.85);
+      const tr = c.createGain(); tr.gain.value = 0.82; const tl = c.createOscillator(); tl.frequency.value = 5.6; const tg = c.createGain(); tg.gain.value = 0.18; tl.connect(tg); tg.connect(tr.gain);
+      for (const [mul, a, det] of [[1, 1, -3], [1, 0.8, 4], [2, 0.12, 0], [3, 0.04, 0]]) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f * mul; o.detune.value = det; const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(tr); o.start(t); o.stop(end); }
+      tr.connect(g); tl.start(t); tl.stop(end); g.connect(this.musicBus);
+      const r = c.createGain(); r.gain.value = 1.0; g.connect(r); r.connect(this.revSend);
+      const e = c.createGain(); e.gain.value = 0.5; g.connect(e); e.connect(this.echo);
+    }
+    sung(t, f, vel, dur, vowel) {    // one voice of the choir, alone: a soft saw and triangle through the formants of 'ah' or 'oo'
+      const c = this.ctx, g = c.createGain(), att = Math.min(0.35, dur * 0.3), end = t + dur + 0.9;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + att); g.gain.setValueAtTime(vel, t + Math.max(att + 0.01, dur * 0.75)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.8);
+      const F = vowel === 'oo' ? [380, 880, 4, 6] : [760, 1150, 5, 7];
+      const f1 = c.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = F[0]; f1.Q.value = F[2];
+      const f2 = c.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = F[1]; f2.Q.value = F[3];
+      const into = c.createGain(), mix = c.createGain(); mix.gain.value = 2.4; into.connect(f1); into.connect(f2); f1.connect(mix); f2.connect(mix);
+      const dry = c.createGain(); dry.gain.value = 0.3; into.connect(dry); dry.connect(mix);
+      const v = c.createOscillator(); v.frequency.value = 4.9; const vg = c.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.008, t + Math.max(0.5, dur * 0.6)); v.connect(vg);
+      for (const [type, a, det] of [['sawtooth', 0.7, -4], ['triangle', 1, 3]]) { const o = c.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det; vg.connect(o.frequency); const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(into); o.start(t); o.stop(end); }
+      v.start(t); v.stop(end);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; mix.connect(lp); lp.connect(g); g.connect(this.musicBus);
+      const r = c.createGain(); r.gain.value = 0.9; g.connect(r); r.connect(this.revSend);
+      const e = c.createGain(); e.gain.value = 0.3; g.connect(e); e.connect(this.echo);
+    }
+    harp(t, f, vel, dur) { const g = this.voice(t, f, 0.2 * vel, dur || 2.2, [[1, 1, 1], [2, 0.35, 0.45], [3, 0.12, 0.25], [4.02, 0.05, 0.12]]); const r = this.ctx.createGain(); r.gain.value = 0.55; g.connect(r); r.connect(this.revSend); const e = this.ctx.createGain(); e.gain.value = 0.25; g.connect(e); e.connect(this.echo); }
+    // a chord held, in one of the worlds' colours
+    chordPad(t, freqs, dur, kind, vel) {
+      const K = PADK[kind], c = this.ctx, g = c.createGain(), att = K.att, rel = K.rel, end = t + dur + rel + 0.1;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + att); g.gain.setValueAtTime(vel, t + Math.max(att + 0.01, dur)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + rel);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = K.lp; lp.Q.value = K.q || 0.6;
+      let into = lp;
+      if (K.formant) {
+        const f1 = c.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = K.formant[0]; f1.Q.value = 5;
+        const f2 = c.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = K.formant[1]; f2.Q.value = 7;
+        const mix = c.createGain(); mix.gain.value = 2; f1.connect(mix); f2.connect(mix); mix.connect(lp);
+        into = c.createGain(); into.connect(f1); into.connect(f2); const dry = c.createGain(); dry.gain.value = 0.3; into.connect(dry); dry.connect(lp);
+      }
+      for (const f of freqs) for (const [type, a, det, mul] of K.osc) {
+        const o = c.createOscillator(); o.type = type; o.frequency.value = f * (mul || 1); o.detune.value = det + (this.rnd() - 0.5) * 4;
+        const og = c.createGain(); og.gain.value = a / freqs.length; o.connect(og); og.connect(into); o.start(t); o.stop(end);
+      }
+      if (K.trem) {
+        const tl = c.createOscillator(); tl.frequency.value = K.trem; const tg = c.createGain(); tg.gain.value = K.tremD || 0.3; tl.connect(tg); const tr = c.createGain(); tr.gain.value = 1 - (K.tremD || 0.3); tg.connect(tr.gain);
+        lp.connect(tr); tr.connect(g); tl.start(t); tl.stop(end);
+      } else lp.connect(g);
+      g.connect(this.musicBus); const r = c.createGain(); r.gain.value = K.rev; g.connect(r); r.connect(this.revSend);
+    }
+
+    /* the floor of each piece: its tonic held low the whole way through, the filter breathing slowly (the cave's own hum,
+       in the piece's key) */
+    startPedal(t, T, v) {
+      this.stopPedal(t);
+      const c = this.ctx, g = c.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(v * 0.6, t, 1.5);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.7; lp.connect(g);
+      const f = T < 40 ? T * 2 : T, oscs = [];
+      for (const [type, mul, a, dest] of [['sine', 1, 0.6, g], ['sine', 2, 0.3, g], ['sawtooth', 2, 0.16, lp], ['triangle', 3, 0.1, lp]]) { const o = c.createOscillator(); o.type = type; o.frequency.value = f * mul; o.detune.value = (this.rnd() - 0.5) * 6; const og = c.createGain(); og.gain.value = a; o.connect(og); og.connect(dest); o.start(t); oscs.push(o); }
+      const lfo = c.createOscillator(); lfo.frequency.value = 0.045; const lg = c.createGain(); lg.gain.value = 110; lfo.connect(lg); lg.connect(lp.frequency); lfo.start(t); oscs.push(lfo);
+      g.connect(this.musicBus); const r = c.createGain(); r.gain.value = 0.25; g.connect(r); r.connect(this.revSend);
+      this.pedal = { g, oscs, v };
+    }
+    stopPedal(t) { const P = this.pedal; if (!P) return; this.pedal = null; P.g.gain.cancelScheduledValues(t); P.g.gain.setTargetAtTime(0, t, 1.2); for (const o of P.oscs) { try { o.stop(t + 6); } catch (e) { } } }
+
+    /* the piece: where in it we are, and what plays */
+    score_piece(t, n, e) {
+      const P = PIECES[this.fl.piece], S = Live.sec || { i: 0, n: 15 }, last = S.n > 1 && S.i >= S.n - 1;
+      if (this._pk !== this.fl.piece) { this._pk = this.fl.piece; this._n0 = n; this._finAt = -1; if (!this.pedal || this.pedal.for !== this.fl.piece) { this.startPedal(t, F0 * this.fl.tr, P.pedal || 0.2); this.pedal.for = this.fl.piece; } }
+      // the last chamber: a swell into a bar of its own, and the piece begins again there, everything playing
+      if (last && this._finAt < 0) { const m0 = n - this._n0; let wait = 8 - (m0 % 8); if (wait < 4) wait += 8; this._finAt = n + wait; this.revSwell(t + wait * STEP, this.pf(P, 7, P.oct + 1), 0.08, STEP * wait); this.revSwell(t + wait * STEP, this.pf(P, 4, P.oct), 0.06, STEP * wait); }
+      if (!last) this._finAt = -1;
+      const fin = last && this._finAt >= 0 && n >= this._finAt;
+      if (fin && n === this._finAt) { this._n0 = n; this.crash(t, 0.9); this.taiko(t, 0.8, 32); }
+      const m = n - this._n0, per = Math.floor(m / 128), p = m % 128, slot = Math.floor(p / 16);
+      const form = fin ? ['A', 'B', 'C', 'X', 'Y'][Math.min(4, per)] : ['A', 'B', 'X', 'A', 'B', 'Y'][per % 6];
+      const L = fin ? 6 : Math.max(0, Math.min(5, Math.floor(S.i * 6 / Math.max(1, S.n - 1))));
+      const progN = form === 'A' || form === 'X' ? P.progA : form === 'C' ? P.progC || P.progA : P.progB;
+      const name = progN[slot], ch = this.pchord(P, name), nx = this.pchord(P, progN[(slot + 1) % 8]);
+      const h = { m, p, per, slot, s16: p % 16, s8: p % 8, ch, nx, name, L, e, form, fin, T: F0 * this.fl.tr, P };
+      // the chord, held for its two bars
+      if (h.s16 === 0) P.pad.call(this, t, h);
+      // and the swells into every chord change, once the piece is under way
+      if (L >= 4 && h.s16 === 10) this.revSwell(t + STEP * 6, this.pvoice([nx[0]], h.T, 520)[0], 0.022 + 0.005 * (L - 4), STEP * 6);
+      // the world's own sound, which is always there; its bass and its drums
+      P.bed.call(this, t, h);
+      // the theme (or in the interludes a fragment of it far off, or the call)
+      const theme = form === 'A' || (form === 'C' && P.themeC === undefined) ? P.themeA : form === 'B' ? P.themeB : form === 'C' ? P.themeC : null;
+      if (theme) for (const [at, d, len] of theme) { if (at === p) P.lead.call(this, Math.max(0, t + (this.rnd() - 0.5) * 0.018), this.pf(P, d, P.oct), STEP * len, h, d); }   // (played, not printed: a breath early or late)
+      if (form === 'X' && L >= 2) for (const [at, d, len] of P.themeA) { if (at === p && at < 64 && len >= 4) P.far.call(this, t, this.pf(P, d, P.oct + 1), STEP * len, h); }
+      if (form === 'Y' && L >= 1) for (const [at, d, len] of CALL) { if (at === p) P.call.call(this, t, this.pf(P, d, P.oct), STEP * len, h, d); }
+      if (form === 'Y' && L >= 1 && p === 12) P.call.call(this, t, this.pf(P, P.callLow, P.oct - 1), STEP * 20, h, P.callLow, true);
+    }
+    pf(P, d, oct) { return F0 * this.fl.tr * this.pdeg(P, d) * Math.pow(2, oct); }
+
     /* ----------------------------------------------------------- sound effects */
     sfxNoise(t, dur, type, f0, f1, vel, q, dest) {
       const c = this.ctx;
@@ -7570,7 +7905,7 @@ window.DWELLER_DEEP = [
         case 'wade': this.sfxNoise(t, 0.16, 'lowpass', 520, 180, 0.06 * v, 1); break;
         case 'step': this.sfxNoise(t, 0.05, 'bandpass', 900 + 400 * this.rnd(), 500, 0.05 * v, 2); break;
         case 'roll': this.sfxNoise(t, 0.36, 'bandpass', 380, 1100, 0.16 * v, 1.6); break;
-        case 'wjump': this.sfxNoise(t, 0.1, 'highpass', 1800, 900, 0.10 * v, 1); this.sfxTone(t, 260, 480, 0.14, 0.08 * v, 'triangle'); break;
+        case 'wjump': this.sfxTone(t, 96, 60, 0.14, 0.13 * v, 'sine'); this.sfxNoise(t, 0.18, 'lowpass', 1100, 300, 0.08 * v, 0.8); break;   // a soft push off the wall, a breath
         case 'death': {
           this.sfxTone(t, 380, 48, 1.4, 0.34 * v, 'sawtooth'); this.sfxNoise(t, 1.1, 'lowpass', 2400, 90, 0.34 * v, 0.8);
           this.sfxTone(t, F0 * 19, F0 * 19 * 0.5, 1.0, 0.12 * v); this.sfxTone(t, F0 * 21, F0 * 21 * 0.5, 1.0, 0.12 * v); break;
@@ -7640,9 +7975,11 @@ window.DWELLER_DEEP = [
       }
     },
     setTheme(i) {
-      this.themeIdx = i;
+      this.themeIdx = i; this.sec = null;
       if (!this.eng) return;
-      const fl = FLAVOURS[i] || FLAVOURS[0];
+      this.eng._pk = null;                              // (a level's piece begins again from its first bar)
+      const fl = i < 0 ? TOWNFL : FLAVOURS[i] || FLAVOURS[0];
+      if (!fl.piece) this.eng.stopPedal(this.ctx.currentTime);
       if (fl === this.eng.fl) return;
       this.eng.fl = fl; const idx = this.eng.rootIdx; this.eng.rootIdx = -1;
       this.eng.applyRoom(this.ctx.currentTime);
@@ -7650,6 +7987,8 @@ window.DWELLER_DEEP = [
     },
     // the town and the Codex's great room are open places (more echo and hall); everywhere else is close
     setSpace(on) { this.space = !!on; if (this.eng) this.eng.setSpace(this.ctx.currentTime, this.space); },
+    sec: null,
+    setSection(i, n) { this.sec = { i, n }; },
     setMood(e, rootIdx) {
       if (!this.eng) return;
       this.params.energy = e;
@@ -7855,7 +8194,7 @@ window.DWELLER_DEEP = [
     return ctx.startRendering();
   }
 
-  global.DwellerAudio = { Live, Engine, renderTrack, STEP, hz };
+  global.DwellerAudio = { Live, Engine, renderTrack, STEP, hz, FLAVOURS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 </script>
 <script>/* DWELLER — THE DEEP: the rules of the endless descent below the Codex.
@@ -11395,7 +11734,7 @@ window.DWELLER_DEEP = [
   function saveProgress() { lsSet('dweller.v2', JSON.stringify(P)); }
 
   /* ------------------------------------------------------------ settings: volumes, flashes, shake; and the save code */
-  const OPT = { music: 6.9, sound: 6.9, flash: 1, shake: 1, near: 0 };   // (a first start plays at 69% of full; a saved choice wins)
+  const OPT = { music: 5, sound: 5, flash: 1, shake: 1, near: 0 };   // (a first start plays at half; a saved choice wins)
   try { Object.assign(OPT, JSON.parse(lsGet('dweller.opts') || '{}')); } catch (e) { }
   function saveOpts() { lsSet('dweller.opts', JSON.stringify(OPT)); }
   function applyOpts() { const g = (v) => Math.pow(v / 8, 2); A.Live.setVolumes(g(OPT.music), g(OPT.sound)); }
@@ -11870,7 +12209,7 @@ window.DWELLER_DEEP = [
     { const nb = document.createElement('div'); nb.className = 'tb'; nb.id = 'tbN'; nb.textContent = '\u2600\uFE0E'; root.appendChild(nb); tbtn.N = nb;
       nb.addEventListener('pointerdown', (e) => { e.preventDefault(); audioInit(); tryNinth(); }); nb.addEventListener('contextmenu', (e) => e.preventDefault()); }
     const pb = document.createElement('div'); pb.className = 'tb small'; pb.id = 'tbP'; tbLabel(pb, 'II', '#cfd8e0', 30); root.appendChild(pb); tbtn.P = pb;
-    pb.addEventListener('pointerdown', (e) => { e.preventDefault(); audioInit(); if (mode === 'play') setPause(true); else if (mode === 'pause') setPause(false); });
+    pb.addEventListener('pointerdown', (e) => { e.preventDefault(); audioInit(); if (mode === 'play') setPause(true); else if (mode === 'pause') setPause(false); else if (mode === 'town') toTitle(); });   // (in the town it goes to the title, as Escape does)
     addEventListener('touchstart', () => { if (!touchMode) { touchMode = true; } document.body.classList.add('touch'); }, { passive: true });
   }
   function syncTouchUI() {
@@ -11880,7 +12219,6 @@ window.DWELLER_DEEP = [
     document.body.classList.toggle('cmp', mode === 'town' || (playing && !!(S && S.cmp)));
     if (tbtn.E) tbLabel(tbtn.E, mode === 'town' || RLM ? 'ENTER' : 'SEEK', '#bfeee4', 54);
     document.body.classList.toggle('cmp', mode === 'town' || !!RLM || (playing && !!(S && S.cmp)));
-    if (tbtn.P) tbtn.P.style.display = mode === 'town' ? 'none' : '';
   }
   canvas.addEventListener('pointerdown', (e) => {
     audioInit(); grabFocus();
@@ -12030,7 +12368,7 @@ window.DWELLER_DEEP = [
       const seen = P.seen[cur] || (P.seen[cur] = '');
       if (seen.indexOf('|' + i + '|') < 0) { cardText = sec.title; cardT = 0; P.seen[cur] = seen + '|' + i + '|'; saveProgress(); }
       const m = sec.music || { e: 0.2, root: 0 };
-      A.Live.setMood(m.e, m.root);
+      A.Live.setSection(i, world.sections.length); A.Live.setMood(m.e, m.root);
     }
   }
 
